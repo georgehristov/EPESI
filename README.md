@@ -1,3 +1,10 @@
+*responsive* branch
+=
+
+This branch has been create to rewrite GUI. Please review [guidelines file](https://github.com/Telaxus/EPESI/blob/responsive/RESPONSIVE_GUIDELINES.md)
+for more information.
+
+
 <a href="epe.si">EPESI</a>
 =
 

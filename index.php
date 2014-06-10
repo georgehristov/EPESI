@@ -131,21 +131,19 @@ Please choose <?php print(EPESI);?> version:<ul>
 }
 
 ?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-
-		<head profile="http://www.w3.org/2005/11/profile">
-		<link rel="icon" type="image/png" href="images/favicon.png" />
-		<link rel="apple-touch-icon" href="images/apple-favicon.png" />
-		<title><?php print(EPESI);?></title>
-		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-		<meta name="SKYPE_TOOLBAR" content="SKYPE_TOOLBAR_PARSER_COMPATIBLE" />
-        <meta name="robots" content="NOINDEX, NOARCHIVE">
+<!DOCTYPE html>
+<html>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link rel="icon" type="image/png" href="images/favicon.png" />
+    <link rel="apple-touch-icon" href="images/apple-favicon.png" />
+    <title><?php print(EPESI);?></title>
+    <meta name="SKYPE_TOOLBAR" content="SKYPE_TOOLBAR_PARSER_COMPATIBLE" />
+    <meta name="robots" content="NOINDEX, NOARCHIVE">
 <?php
 	ini_set('include_path','libs/minify'.PATH_SEPARATOR.'.'.PATH_SEPARATOR.'libs'.PATH_SEPARATOR.ini_get('include_path'));
 	require_once('Minify/Build.php');
-	$jses = array('libs/prototype.js','libs/jquery-1.7.2.min.js','libs/jquery-ui-1.10.1.custom.min.js','libs/HistoryKeeper.js','include/epesi.js');
+	$jses = array('libs/prototype.js','libs/jquery-1.7.2.min.js','libs/jquery-ui-1.10.1.custom.min.js','libs/HistoryKeeper.js','libs/bootstrap/js/bootstrap.js', 'include/epesi.js');
 	$jsses_build = new Minify_Build($jses);
 	$jsses_src = $jsses_build->uri('serve.php?'.http_build_query(array('f'=>array_values($jses))));
 ?>
@@ -155,8 +153,9 @@ Please choose <?php print(EPESI);?> version:<ul>
 	$csses_build = new Minify_Build($csses);
 	$csses_src = $csses_build->uri('serve.php?'.http_build_query(array('f'=>array_values($csses))));
 ?>
-		<link type="text/css" href="<?php print($csses_src)?>" rel="stylesheet"></link>
-
+		<link type="text/css" href="<?php print($csses_src)?>" rel="stylesheet">
+        <!-- Include main style in the standard way due to relative paths in css -->
+		<link type="text/css" href="style/css/epesi.css" rel="stylesheet">
 		<style type="text/css">
 			<?php if (DIRECTION_RTL) print('body { direction: rtl; }'); ?>
 			#epesiStatus {
