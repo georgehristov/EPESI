@@ -27,6 +27,15 @@ class CRM_RoundcubeCommon extends Base_AdminModuleCommon {
         return array();
     }
 
+    public static function use_standard_mailto() {
+        return Base_User_SettingsCommon::get('CRM_Roundcube', 'standard_mailto');
+    }
+
+    public static function set_standard_mailto($value)
+    {
+        Base_User_SettingsCommon::save('CRM_Roundcube', 'standard_mailto', $value);
+    }
+
     public static function QFfield_account_name(&$form, $field, $label, $mode, $default, $desc, $rb=null) {
         $form->addElement('text', $field, $label,array('id'=>$field));
         $form->registerRule($field,'function','check_account_name','CRM_RoundcubeCommon');
@@ -133,6 +142,7 @@ class CRM_RoundcubeCommon extends Base_AdminModuleCommon {
             } else
                 $param['default_account']=1;
         }
+        if($mode=='index') return array();
         return $param;
     }
 
@@ -352,11 +362,12 @@ class CRM_RoundcubeCommon extends Base_AdminModuleCommon {
             $x->push_main('CRM_Roundcube','new_mail',array($_REQUEST['rc_mailto']));
             unset($_REQUEST['rc_mailto']);
         }
-        $ret = Utils_RecordBrowserCommon::get_records_count('rc_accounts',array('epesi_user'=>Acl::get_user()));
-        if($ret) {
-//    	    return '<a '.Base_BoxCommon::create_href('','CRM_Roundcube','new_mail',array($v)).'>'.$v.'</a>';
-      	    return '<a '.Module::create_href(array('rc_mailto'=>$v)).'>'.$v.'</a>';
-      	}
+        if (!CRM_RoundcubeCommon::use_standard_mailto()) {
+            $ret = Utils_RecordBrowserCommon::get_records_count('rc_accounts',array('epesi_user'=>Acl::get_user()));
+            if($ret) {
+                return '<a '.Module::create_href(array('rc_mailto'=>$v)).'>'.$v.'</a>';
+            }
+        }
     	return '<a href="mailto:'.$v.'">'.$v.'</a>';
 	}
 	

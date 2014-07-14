@@ -1,9 +1,10 @@
 EPESI CHANGELOG
 ===============
 
-CURRENT
+RELEASE 1.6.0-20140710
 -------
 
+- New attachments based on RecordBrowser
 - Add exception handling
 - Fix Base/Print uninstall method
 - Fix attachments when mcrypt module is not loaded
@@ -20,6 +21,12 @@ CURRENT
 - Move jump to id setting to database (remove function Utils_RecordBrowser::disable_jump_to_record)
 - Add option to run update procedure from commandline interface
 - Add maintenance mode
+- Add Utils_CurrencyFieldCommon::parse_currency method
+- Improve RB uninstall method to remove processing callbacks and others
+- Add option to create mailto: links even when RoundCube accounts are set
+- Time management for patches
+- Allow patches to save some state and run from that place
+- Update process reinvented to match new patches with restart
 
 RELEASE 1.5.6-20140305
 -------

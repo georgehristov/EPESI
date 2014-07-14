@@ -89,10 +89,10 @@
                     <td>
                         <table cellpadding="0" cellspacing="0" border="0" class="{if $action == 'view'}view{else}edit{/if}">
                         <tr>
-                        <td class="label">{$fields.date.label}{if $fields.date.required}*{/if}</td>
-                        <td class="data {$fields.date.style}" id="_{$fields.date.element}__data">
+                        <td class="label">{$fields.edited_on.label}{if $fields.edited_on.required}*{/if}</td>
+                        <td class="data {$fields.edited_on.style}" id="_{$fields.edited_on.element}__data">
                             <div style="position:relative;">
-                                {if $fields.date.error}{$fields.date.error}{/if}{$fields.date.html}{if $action == 'view'}&nbsp;{/if}
+                                {if $fields.edited_on.error}{$fields.edited_on.error}{/if}{$fields.edited_on.html}{if $action == 'view'}&nbsp;{/if}
                             </div>
                         </td>
                         </tr>
@@ -159,6 +159,7 @@
                        <td class="data frozen">
                            <div id="multiple_attachments"><div id="filelist"></div></div>
                            {'Click here and press CTRL+V to paste your clipboard'|t}
+                           <a href="javascript:void(0)" id="pickfiles" class="button">{'Select files'|t}</a>
                        </td>
                         </tr>
                         </table>
@@ -174,7 +175,7 @@
                     {assign var=x value=1}
                     {assign var=y value=1}
                     {foreach key=k item=f from=$fields name=fields}
-                        {if $k!='title' && $k!='permission' && $k!='date' && $k!='sticky' && $k!='crypted'}
+                        {if $k!='title' && $k!='permission' && $k!='edited_on' && $k!='sticky' && $k!='crypted'}
                         {if $f.type!="multiselect"}
                             {if !isset($focus) && $f.type=="text"}
                                 {assign var=focus value=$f.element}

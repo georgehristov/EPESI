@@ -725,6 +725,8 @@ class CRM_MeetingCommon extends ModuleCommon {
 			if (mb_strlen($e,'UTF-8')>33) $e = mb_substr($e , 0, 30, 'UTF-8').'...';
 			$emps[] = $e;
 		}
+		$next['busy_label'] = $emps;
+		
 		$cuss = array();
 		foreach ($r['customers'] as $c) {
 			$c = CRM_ContactsCommon::display_company_contact(array('customers'=>$c), true, array('id'=>'customers'));
@@ -814,21 +816,6 @@ class CRM_MeetingCommon extends ModuleCommon {
         if(!$row) return false;
         return Utils_RecordBrowserCommon::record_link_open_tag('crm_meeting', $row['id']).__( 'Meeting (attachment) #%d, %s at %s', array($row['id'], $row['title'], Base_RegionalSettingsCommon::time2reg($row['date'], false))).Utils_RecordBrowserCommon::record_link_close_tag();
     }
-
-	public static function search($word){
-		$ret = array();
-		if(Utils_RecordBrowserCommon::get_access('crm_meeting','browse')) {
-			$crits = array('(~"title'=>DB::Concat('\'%\'',DB::qstr($word),'\'%\''), '|~"description'=>DB::Concat('\'%\'',DB::qstr($word),'\'%\''));
-            $limit = Base_SearchCommon::get_recordset_limit_records();
-			$result = Utils_RecordBrowserCommon::get_records('crm_meeting', $crits, array(), array(), $limit);
-
-	 		foreach ($result as $row) {
-				$ret[$row['id']] = Utils_RecordBrowserCommon::record_link_open_tag('crm_meeting', $row['id']).__( 'Meeting #%d, %s at %s', array($row['id'], $row['title'], Base_RegionalSettingsCommon::time2reg($row['date'], false))).Utils_RecordBrowserCommon::record_link_close_tag();
-	 		}
- 		}
-		
-		return $ret;
-	}
 
 	public static function get_alarm($id) {
 		$a = self::get_meeting($id);

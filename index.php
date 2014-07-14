@@ -80,11 +80,11 @@ class EpesiIndex
         require_once('include/variables.php');
         require_once('include/misc.php');
 
-        if ($this->update_available()) {
-            $this->update_process();
-        } else {
-            $this->show_index();
+        if (epesi_requires_update()) {
+            header('Location: update.php');
+            exit();
         }
+        $this->show_index();
 
         $content = ob_get_clean();
 
@@ -94,29 +94,6 @@ class EpesiIndex
             $he->encode();
         }
         $he->sendAll();
-    }
-
-    private function update_available()
-    {
-        $installed_version = Variable::get('version');
-        return $installed_version !== EPESI_VERSION;
-    }
-
-    private function update_process()
-    {
-        if (isset($_GET['up'])) {
-            require_once('update.php');
-            $retX = ob_get_clean();
-            if (trim($retX)) {
-                die($retX);
-            }
-            header('Location: index.php');
-        } else {
-            $title = EPESI . " update";
-            $this->print_html_header($title);
-            $this->print_update_message();
-            $this->print_html_footer(true);
-        }
     }
 
 private function print_html_header($title)
@@ -170,17 +147,6 @@ private function print_html_header($title)
         print(' class="epesi_rtl"');
     } ?>>
     <?php
-    }
-
-    private function print_update_message()
-    {
-        $installed_version = Variable::get('version'); ?>
-        <div>
-            Updating EPESI from version <?php echo $installed_version; ?>
-            to <?php echo EPESI_VERSION; ?>. This operation may take several
-            minutes.
-            <a href="index.php?up=1">Click here to proceed</a>
-        </div> <?php
     }
 
     private function print_html_footer($with_copyright)

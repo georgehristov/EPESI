@@ -44,7 +44,6 @@ class Utils_RecordBrowser extends Module {
 	private $hide_tab = array();
     public $action = 'Browsing'; // _M('Browsing');
     public $custom_defaults = array();
-    public static $admin_filter = '';
     public static $tab_param = '';
     public static $clone_result = null;
     public static $clone_tab = null;
@@ -782,11 +781,16 @@ class Utils_RecordBrowser extends Module {
             $form->addElement('select', 'show_records', __('Show records'), array(0=>'['.__('All').']',1=>'['.__('All active').']',2=>'['.__('All deactivated').']'), array('onchange'=>$form->get_submit_form_js()));
             $f = $this->get_module_variable('admin_filter', 0);
             $form->setDefaults(array('show_records'=>$f));
-            self::$admin_filter = $form->exportValue('show_records');
-            $this->set_module_variable('admin_filter', self::$admin_filter);
-            if (self::$admin_filter==0) self::$admin_filter = '';
-            if (self::$admin_filter==1) self::$admin_filter = 'active=1 AND ';
-            if (self::$admin_filter==2) self::$admin_filter = 'active=0 AND ';
+            $admin_filter = $form->exportValue('show_records');
+            $this->set_module_variable('admin_filter', $admin_filter);
+            switch($admin_filter) {
+                case 0: Utils_RecordBrowserCommon::$admin_filter = '';
+                    break;
+                case 1: Utils_RecordBrowserCommon::$admin_filter = 'active=1 AND ';
+                    break;
+                case 2: Utils_RecordBrowserCommon::$admin_filter = 'active=0 AND ';
+                    break;
+            }
             $form->display_as_row();
         }
         if (isset($this->force_order)) $order = $this->force_order;
@@ -1376,7 +1380,9 @@ class Utils_RecordBrowser extends Module {
                     $row['label'] = $result['label'];
                 } else {
 					if ($mode=='add' || $mode=='edit') continue;
-					$row['label'] = _V($row['label']); // ****** Translate addons captions frrom the DB
+					$labels = explode('#',$row['label']);
+					foreach($labels as $i=>$label) $labels[$i] = _V($label); // translate labels from database
+					$row['label'] = implode('#',$labels);
 				}
                 $mod_id = md5(serialize($row));
 				if (method_exists($row['module'].'Common',$row['func'].'_access') && !call_user_func(array($row['module'].'Common',$row['func'].'_access'), $this->record, $this)) continue;

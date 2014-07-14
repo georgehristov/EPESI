@@ -24,7 +24,7 @@ Example installation_config.php file:
 <?php
 $CONFIG = array('user' => 'db_username', 'password' => 'db_password', 'db' => 'database_name', 'host' => 'db_server_host',
     'newdb' => 0,  // or 1 to create new database
-    'engine' => 'mysqlt',  // or 'postgre' for PostgreSQL
+    'engine' => 'mysqlt',  // or 'postgres' for PostgreSQL
     'direction' => 0  // Left to Right, or 1 for Right to Left
 );
 ?>
@@ -391,6 +391,17 @@ function write_config($host, $user, $pass, $dbname, $engine, $other) {
 		$other_conf .= "\n".'@define("EPESI_DIR","'.str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])).'");';
 	$other_conf .= "\n".'define("DIRECTION_RTL","'.($other['direction']?'1':'0').'");';
 
+	$protocol = (isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS'])!== "off") ? 'https://' : 'http://';
+        $domain_name = '';
+        if (isset($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST']) {
+            $domain_name = $_SERVER['HTTP_HOST'];
+        } else if (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME']) {
+            $domain_name = $_SERVER['SERVER_NAME'];
+        }
+        if($domain_name) {
+            $url = $protocol . $domain_name . dirname($_SERVER['REQUEST_URI']);
+	    $other_conf .= "\n".'define("EPESI_URL","'.$url.'");';
+        }
 	$c = & fopen(DATA_DIR.'/config.php', 'w');
 	fwrite($c, '<?php
 /**
@@ -564,7 +575,7 @@ function install_base() {
 	if($ret===false)
 		die('Invalid SQL query - Setup module (modules table)');
 
-	$ret = DB::CreateTable('cron',"func C(32) KEY,last I NOTNULL, running I1 NOTNULL DEFAULT 0");
+	$ret = DB::CreateTable('cron',"func C(32) KEY,last I NOTNULL, running I1 NOTNULL DEFAULT 0, description C(255)");
 	if($ret===false)
 		die('Invalid SQL query - Setup cron (cron table)');
 

@@ -84,7 +84,10 @@ class MaintenanceMode
 
     public static function generate_file($key, $message = null)
     {
+        $user = Base_UserCommon::get_my_user_login();
+        $date = date('Y-m-d H:i:s');
         $str = "<?php\n";
+        $str .= "// by $user on $date\n";
         $str .= '$maintenance_mode_key = ' . var_export($key, true);
         $str .= ";\n";
         $str .= '$maintenance_mode_message = ' . var_export($message, true);
@@ -94,19 +97,18 @@ class MaintenanceMode
 
 }
 
-if (!defined('BYPASS_EPESI_MAINTENANCE_MODE')) {
-    if (!MaintenanceMode::can_access()) {
-        if (defined('JS_OUTPUT') && JS_OUTPUT) {
-            header("Content-type: text/javascript");
-            header("Cache-Control: no-cache, must-revalidate");
-            header("Expires: Mon, 26 Jul 1997 05:00:00 GMT"); // date in the past
+if (!MaintenanceMode::can_access()) {
+    if (defined('JS_OUTPUT') && JS_OUTPUT) {
+        header("Content-type: text/javascript");
+        header("Cache-Control: no-cache, must-revalidate");
+        header("Expires: Mon, 26 Jul 1997 05:00:00 GMT"); // date in the past
 
-            die ('window.location = "index.php";');
-        } else {
-            $msg = isset($maintenance_mode_message)
-                ? $maintenance_mode_message
-                : "System is in the maintenance mode. Please wait until your system administrator will turn it off.";
-            die ($msg);
-        }
+        die ('window.location = "index.php";');
+    } else {
+        global $maintenance_mode_message;
+        $msg = isset($maintenance_mode_message)
+            ? $maintenance_mode_message
+            : "System is in the maintenance mode. Please wait until your system administrator will turn it off.";
+        die ($msg);
     }
 }
