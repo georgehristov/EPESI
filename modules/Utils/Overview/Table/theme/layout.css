@@ -1,0 +1,19 @@
+#Utils_Overview__table .layer {
+	padding: 0px;
+	width: 100%;
+}
+
+#Utils_Overview__table .layer .margin2px {
+	padding: 0px;
+	width: 100%;
+	border: 1px solid #B3B3B3;
+}
+
+#Utils_Overview__table .css3_content_shadow {
+	/* removing shadows from GenericBrowser */
+	/* css3 shadow border*/
+	-webkit-box-shadow: 0px 0px 0px black;
+	-moz-box-shadow: 0px 0px 0px black;
+	box-shadow: 0px 0px 0px black;
+	/* end css3 shadow border*/
+}

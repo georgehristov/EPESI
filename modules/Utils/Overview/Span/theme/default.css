@@ -1,0 +1,54 @@
+table.Utils_Overview_Span__wrapper {
+	width: 100%;
+	height: 100%;
+	border-collapse: collapse;
+}
+
+.Utils_Overview_Span__wrapper td {
+	padding: 2px;
+}
+
+table.Utils_Overview_Span__row {
+	width: 100%;
+	height: 100%;
+}
+
+.Utils_Overview_Span__row td {
+	padding: 0px;
+}
+
+.Utils_Overview_Span__bar div {
+	background-color: #0199d9;
+	-webkit-border-radius: 3px;
+	border-radius: 5px;
+	color: white;
+	width: 100%;
+	height: 100%;
+	cursor: pointer;
+	vertical-align: middle;
+	position: relative;
+}
+
+span.Utils_Overview_Span__bar__text {
+	display: inline-block;
+	position: relative;
+	top: 50%;
+	-ms-transform: translateY(-50%);
+	-webkit-transform: translateY(-50%);
+	transform: translateY(-50%);
+}
+
+span.Utils_Overview_Span__bar__icon {
+	position:absolute; 
+	left: 4px; 
+	top: 4px;
+}
+
+.Utils_Overview_Span__bar div:hover {
+	opacity: 0.85;
+}
+
+.Utils_Overview_Span__bar img {
+	width: 12px;
+	height: 12px;
+}
