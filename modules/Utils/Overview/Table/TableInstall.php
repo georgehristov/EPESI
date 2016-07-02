@@ -47,7 +47,7 @@ class Utils_Overview_TableInstall extends ModuleInstall {
 	}
 		
 	public function simple_setup() {
-		return __('Overview');
+		return array('package'=>__('Overview'), 'version'=>self::version);
 	}	
 }
 

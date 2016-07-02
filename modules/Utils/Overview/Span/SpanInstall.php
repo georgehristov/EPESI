@@ -40,7 +40,7 @@ class Utils_Overview_SpanInstall extends ModuleInstall {
 	}
 	
 	public function simple_setup() {
-		return array('package' => __('Overview'), 'version'=>self::version());
+		return array('package' => __('Overview'), 'version'=>self::version);
 	}	
 }
 

@@ -27,6 +27,7 @@ table.Utils_Overview_Span__row {
 	cursor: pointer;
 	vertical-align: middle;
 	position: relative;
+	border: 1px solid black;
 }
 
 span.Utils_Overview_Span__bar__text {

@@ -15,6 +15,7 @@ class Utils_Overview extends Module {
 	private $filters_template = null;
 	private $filters_form = null;
 	private $submit_form_onchange = true;
+	private $onchange = '';
 	private $mode_form = null;
 	private $hide_filters = true;
 	private $caption = '';
@@ -108,17 +109,26 @@ class Utils_Overview extends Module {
 		ob_start();
 	
 		if (!empty($this->tabs)) {
-			$tb = $this->init_module(Utils_TabbedBrowser::module_name());
-			
-			foreach($this->tabs as $id=>$t) {
+			foreach($this->tabs as $id=>&$t) {
 				$t['func'] = ($t['func'] == '__DEFAULT__')? array($this, 'display_overview_table'): $t['func'];
 				$t['args'] = array_merge(array($id, $pdf, $this->get_display_vars()), !empty($t['args'])? $t['args']: array());
-				
-				$tb->set_tab($t['label'], $t['func'], $t['args']);
 			}
-			
-			$tb->body();
-			$tb->tag();
+			unset($t);
+				
+			if (count($this->tabs) > 1) {
+				$tb = $this->init_module(Utils_TabbedBrowser::module_name());
+					
+				foreach($this->tabs as $id=>$t)
+					$tb->set_tab($t['label'], $t['func'], $t['args']);
+					
+				$tb->body();
+				$tb->tag();		
+			}
+			else{
+				$t = reset($this->tabs);
+				if (is_callable($t['func']))
+					call_user_func_array($t['func'], $t['args']);
+			}
 		}
 		else 
 			$this->table = $this->display_overview_table($this->id, $pdf, $this->get_display_vars(), $this->table_opts);
@@ -201,8 +211,7 @@ class Utils_Overview extends Module {
 			$v['title'] = isset($v['title']) ? $v['title'] : '';
 			$v['select_options'] = isset($v['select_options']) ? $v['select_options'] : null;
 			$v['attr'] = isset($v['attr']) ? $v['attr'] : array();
-				
-			$disable_form_submit = false;
+
 			//create chained selects
 			if ($v['type'] == 'select' && isset($v['chained']['fields']) && isset($v['chained']['url'])) {
 				$chained_prev_ids = is_array($v['chained']['fields'])? $v['chained']['fields']: array($v['chained']['fields']);
@@ -211,15 +220,12 @@ class Utils_Overview extends Module {
 				$v['select_options'] = is_callable($v['chained']['select_options_callback'])? call_user_func_array($v['chained']['select_options_callback'], array_intersect_key($this->filters_form->exportValues(), array_flip($chained_prev_ids))):array();
 				
 				$chained[$k] = array($k, $chained_prev_ids, $v['chained']['url'], $chained_params);
-				
-				if (!isset($v['disable_onchange']) || $v['disable_onchange'])
-					$disable_form_submit = '';
 			}
 			
 			$attr = array_merge(array('id'=>$k), $v['attr']);
-			if ($this->submit_form_onchange && !$disable_form_submit && (!isset($v['disable_onchange']) || !$v['disable_onchange'])) {
+			if ($this->submit_form_onchange && (!isset($v['disable_onchange']) || !$v['disable_onchange'])) {
 				$attr['onchange'] = isset($attr['onchange'])? $attr['onchange'] . ';': '';
-				$attr['onchange'] .= $this->filters_form->get_submit_form_js();
+				$attr['onchange'] .= $this->onchange?: $this->filters_form->get_submit_form_js();
 			}
 				
 			if (isset($v['style'])) $attr['style'] = $v['style'];
@@ -278,9 +284,9 @@ class Utils_Overview extends Module {
 		if (!is_array($settings)) return;
 		
 		foreach ($settings as $key=>$value)
-			if (method_exists($this, 'set_' . $key))
-				call_user_method('set_' . $key, $this, $value);
-			elseif (method_exists('Utils_Overview_Table', 'set_' . $key))
+			if (is_callable(array($this, 'set_' . $key)))
+				call_user_func(array($this, 'set_' . $key), $value);
+			elseif (is_callable(array('Utils_Overview_Table', 'set_' . $key)))
 				$this->table_opts[$key] = $value;
 	}
 
@@ -326,6 +332,12 @@ class Utils_Overview extends Module {
 	public function set_submit_form_onchange($value = true){
 		$this->submit_form_onchange = $value;
 		
+		return $this;
+	}
+	
+	public function set_onchange($value = ''){
+		$this->onchange = $value;
+	
 		return $this;
 	}
 	
@@ -387,11 +399,18 @@ class Utils_Overview extends Module {
 		return true;
 	}
 	
-	public function __call($method, $args) {		
+	public function & __call($method, array $args=array()) {
+		$ret = false;
+		
+		if (is_callable(array('parent', '__call')))
+			$ret = parent::__call($method, $args);
+		
 		if (method_exists('Utils_Overview_Table', $method)) {
 			$key = str_ireplace('set_', '', $method);
 			$this->table_opts[$key] = reset($args);
-		}				
+		}	
+
+		return $ret;
 	}
 	
 	public function get_table_id() {

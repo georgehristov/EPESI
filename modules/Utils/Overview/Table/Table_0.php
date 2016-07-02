@@ -207,7 +207,7 @@ class Utils_Overview_Table extends Module {
 		$this->mode = $value;
 	}
 	
-	public function get_mode($value) {
+	public function get_mode() {
 		return $this->mode;
 	}
 	
@@ -399,8 +399,8 @@ class Utils_Overview_Table extends Module {
 		if (!is_array($settings)) return;
 		
 		foreach ($settings as $key=>$value)
-			if (method_exists($this, 'set_' . $key))
-				call_user_method('set_' . $key, $this, $value);
+			if (is_callable(array($this, 'set_' . $key)))
+				call_user_func(array($this, 'set_' . $key), $value);
 	}
 
 	public function set_icon($icon) {
@@ -793,7 +793,7 @@ class Utils_Overview_Table extends Module {
 	private function get_row_data($category_id, $pdf = false) {
 		$data = array();
 		if (is_callable($this->row_callback)) {
-			$this->rows[$category_id] = call_user_func_array($this->row_callback, array($category_id, $this->get_cols($pdf), $this->get_filter_values(), $pdf, $tab));
+			$this->rows[$category_id] = call_user_func_array($this->row_callback, array($category_id, $this->get_cols($pdf), $this->get_filter_values(), $pdf));
 			$data = $this->rows[$category_id];
 		}
 		else {
