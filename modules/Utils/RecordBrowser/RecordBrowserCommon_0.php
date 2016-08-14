@@ -1882,6 +1882,69 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         }
         return $ret;
     }
+    public function get_table_records($request=null, $args){
+    	$tab = $args['tab'];
+    	$crits = $args['crits'];
+    	$order = $args['order'];
+    	$limit = $args['limit'];
+    	$disabled = $args['disabled'];
+    	
+    	$fields = self::init($tab);
+    
+    	$columns = array(array('data'=>'actions', 'width'=>10));
+    	$search_crits = array();
+    	foreach ($fields as $field_name=>$desc) {
+    		if (!$desc['visible']) continue;
+    		$field_id = $desc['id'];
+    		$columns[] = array('data'=>$desc['id'], 'title'=>$field_name, 'className'=>'dt-left');
+    			
+    		if (isset($request['search']) && !empty($request['search']['value']) && in_array($desc['type'], array('text'))) {
+    			if (!$search_crits) $search_field_id = '(~"';
+    			else $search_field_id = '|~"';
+    
+    			$search_field_id .= $field_id;
+    
+    			$search_crits[$search_field_id] = DB::Concat(DB::qstr('%'), DB::qstr(htmlspecialchars($request['search']['value'],ENT_QUOTES,'UTF-8')), DB::qstr('%'));
+    		}
+    	}
+    
+    	$crits = self::merge_crits($crits, $search_crits);
+    	$order = $request? Utils_DataTablesCommon::get_order($request, $columns): $order;
+    	$limit = $request? Utils_DataTablesCommon::get_limit($request): $limit;
+    
+    	if (isset($limit['start']))
+    		$limit['offset'] = $limit['start'];
+    	if (isset($limit['length']))
+    		$limit['numrows'] = $limit['length'];
+    
+    	$records = Utils_RecordBrowserCommon::get_records($tab, $crits, array(), $order, $limit);
+    
+    	$data = array();
+    	foreach ($records as $id=>$record) {
+    		$record = Utils_RecordBrowserCommon::record_processing($tab, $record, 'browse');
+    		
+    		if (!$record) continue;
+    		
+    		$vals = Utils_RecordBrowserCommon::get_record_vals($tab, $record);
+    		
+    		$vals['actions'] = '';
+    		
+    		$actions = array('view', 'edit');
+    		foreach ($actions as $action) {
+    			$icon = '<img class="action_button" src="'.Base_ThemeCommon::get_template_file(Utils_GenericBrowser::module_name(), $action . '.png').'" border="0">';
+    			$vals['actions'] .=  '<a ' . self::create_record_href($tab, $id, $action) . '>'.$icon.'</a>';    		
+    		}
+    		$vals['DT_RowId'] = 'row_' . $id;
+    		
+    		$data[] = $vals;
+    	}
+    
+    	return array(
+    		'columns'=>$columns,
+    		'data'=>$data,
+    		'total'=>Utils_RecordBrowserCommon::get_records_count($tab)
+    	);
+    }
     public static function get_record_info($tab, $id) {
         self::check_table_name($tab);
         $created = DB::GetRow('SELECT created_on, created_by FROM '.$tab.'_data_1 WHERE id=%d', array($id));

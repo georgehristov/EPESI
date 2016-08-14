@@ -385,7 +385,55 @@ class Utils_RecordBrowser extends Module {
             print(__('You are not authorised to browse this data.'));
             return;
         }
+        
+        $this->action = 'Browse';
+        if (!Base_AclCommon::i_am_admin() && $admin) {
+        	print(__('You don\'t have permission to access this data.'));
+        }
+        
+        $datatable = $this->init_module(Utils_DataTables::module_name(), $this->tab);
+        
+        $args = array(
+        		'tab'=>$this->tab,
+        		'crits'=>$crits,
+        		'order'=>$order,
+        		'admin'=>$admin,
+        		'limit'=>$limit,
+        		'disabled'=>$this->disabled
+        );
+        
+        $buttons = array();
+        if ($this->get_access('add',$this->custom_defaults)!==false) {
+        	if ($this->add_button!==null) $label = $this->add_button;
+        	elseif (!$this->multiple_defaults) $label = $this->create_callback_href(array($this, 'navigate'), array('view_entry', 'add', null, $this->custom_defaults));
+        	else $label = Utils_RecordBrowserCommon::create_new_record_href($this->tab,$this->custom_defaults,'multi',true,true);
+        	if ($label!==false && $label!=='') {
+        		$custom_label = '<a '.$label.'>'.__('Add new').'</a>';
+        		$buttons[] = array('text'=>$custom_label);
+        	}
+        }
 
+        $buttons[] = array('text'=>'View', 'action'=>'');
+        $buttons[] = array('text'=>'Delete', 'action'=>'');
+        $buttons[] = 'selectAll';
+        $buttons[] = 'selectNone';
+        $buttons[] = 'colvis';
+        
+        $opts = array(
+        		'dom' => 'BZlfrtip',
+        		'hover'=> true,
+        		'stripe'=>true,
+        		'searching'=>!$this->disabled['search'],
+        		'colReorder'=> true,
+        		'buttons'=>$buttons,
+        		'pagingType'=>'full_numbers',
+        		'select'=>array(
+        				'style'=>'os',
+        				'selector'=> 'td:first-child')
+        );
+        $this->display_module($datatable, array(array('func'=>array('Utils_RecordBrowserCommon', 'get_table_records'), 'args'=>$args), $opts));
+        
+        return;
         $this->init();
         $this->action = 'Browse';
         if (!Base_AclCommon::i_am_admin() && $admin) {
