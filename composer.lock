@@ -4,8 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "76958709bf861ae021761a093acfbf64",
-    "content-hash": "3d82e3f1b1f0912e248a46bf24027027",
+    "hash": "0db753e2eeb245694231aa424ab4dfec",
+    "content-hash": "133cffcaa47d9a078c484d1d7f400204",
     "packages": [
         {
             "name": "ircmaxell/password-compat",
@@ -143,6 +143,105 @@
                 "dependency injection"
             ],
             "time": "2015-09-11 15:10:35"
+        },
+        {
+            "name": "ropendev/datatablesphp",
+            "version": "0.0.95",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/RobinDev/DataTablesPHP.git",
+                "reference": "db27cfde013e6813161e81e14a16a4103590085a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/RobinDev/DataTablesPHP/zipball/db27cfde013e6813161e81e14a16a4103590085a",
+                "reference": "db27cfde013e6813161e81e14a16a4103590085a",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0",
+                "ropendev/phptojs": "1.1.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "4.*"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "rOpenDev\\DataTablesPHP\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": ":Robin",
+                    "email": "contact@robin-d.fr",
+                    "homepage": "http://www.robin-d.fr/",
+                    "role": "Developer"
+                }
+            ],
+            "description": "PHP DataTables wrapper class for DataTables.js (Html and/or Javascript generation, Server-Side SQL) .",
+            "homepage": "http://www.robin-d.fr/DataTablesPHP/",
+            "keywords": [
+                "DataTables.js",
+                "datatables",
+                "framework agnostic",
+                "html table",
+                "jQuery Table"
+            ],
+            "time": "2015-01-07 11:53:24"
+        },
+        {
+            "name": "ropendev/phptojs",
+            "version": "1.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/RobinDev/PHPToJS.git",
+                "reference": "6d6bd2b43495f1caaa1798bce18b9c8136750390"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/RobinDev/PHPToJS/zipball/6d6bd2b43495f1caaa1798bce18b9c8136750390",
+                "reference": "6d6bd2b43495f1caaa1798bce18b9c8136750390",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.1-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "rOpenDev\\PHPToJS\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": ":Robin",
+                    "email": "contact@robin-d.fr",
+                    "homepage": "http://www.robin-d.fr/",
+                    "role": "Developer"
+                }
+            ],
+            "description": "PHPToJS's class convert php variable's content to js variable's content preserving javascript expression (like function)",
+            "homepage": "http://www.robin-d.fr/",
+            "keywords": [
+                "javascript",
+                "json_encode",
+                "php to js"
+            ],
+            "time": "2015-01-02 05:36:55"
         },
         {
             "name": "symfony/console",
