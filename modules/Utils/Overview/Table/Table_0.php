@@ -73,7 +73,7 @@ class Utils_Overview_Table extends Module {
 
 			print ($this->get_area('header'));
 				
-			$this->gb->body(Base_ThemeCommon::get_template_filename($this->get_type(), 'pdf'));
+			$this->gb->body(Base_ThemeCommon::get_template_filename($this->get_type(), 'pdf'), false);
 				
 			print ($this->get_area('footer'));
 			
@@ -388,7 +388,7 @@ class Utils_Overview_Table extends Module {
 					$c['width'] = $page_width / $set_width * $c['width'] * $table_width_pct / 100;
 				}
 			}
-			
+
 			$this->cols_set = true;
 		}
 

@@ -293,7 +293,7 @@ class Utils_Overview_TableCommon extends ModuleCommon {
 
 	public static function set_printer($id,$class) {
 		Base_PrintCommon::register_printer(new $class());
-		$exists = DB::GetOne('SELECT 1 FROM overview_table_properties WHERE id=%s', array($class, $id));
+		$exists = DB::GetOne('SELECT 1 FROM overview_table_properties WHERE id=%s', array($id));
 	
 		if ($exists)
 			DB::Execute('UPDATE overview_table_properties SET printer=%s WHERE id=%s', array($class, $id));

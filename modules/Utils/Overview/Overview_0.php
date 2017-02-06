@@ -38,6 +38,7 @@ class Utils_Overview extends Module {
 	}
 	
 	public function set_filter_values($filter_values) {
+		//FIXME: calling this method should not be done from the parent module, body parameter should be used instead. This needs to be done more intuitive
 		$this->filter_values = $filter_values;
 		
 		$stored_vals = array_diff_key($this->filter_values, array_flip($this->do_not_store));		
@@ -46,7 +47,7 @@ class Utils_Overview extends Module {
 		return Module::static_set_module_variable($this->get_type(), $this->get_filter_values_var_name(), $stored_vals);
 	}
 	
-	public function get_filter_values($defaults) {
+	public function get_filter_values($defaults = array()) {
 		if (!empty($this->filter_values)) 
 			return $this->filter_values;
 
@@ -66,15 +67,13 @@ class Utils_Overview extends Module {
 
 		if (!empty($filter_values))
 			$this->set_filter_values($filter_values);
-		
+
 		if (!$pdf) {			
-			if($this->is_back()) {
-				return $this->back();
-			}
+			if($this->is_back()) 
+				Base_BoxCommon::pop_main();
 	
-			if ($this->get_back_button()) {
+			if ($this->get_back_button())
 				Base_ActionBarCommon::add('back', __('Back'), $this->create_back_href());
-			}	
 			
 			Base_HelpCommon::screen_name($this->id);
 			
@@ -217,9 +216,9 @@ class Utils_Overview extends Module {
 				$chained_prev_ids = is_array($v['chained']['fields'])? $v['chained']['fields']: array($v['chained']['fields']);
 				$chained_params = isset($v['chained']['chained_params'])? $v['chained']['chained_params']: array();
 			
-				$v['select_options'] = is_callable($v['chained']['select_options_callback'])? call_user_func_array($v['chained']['select_options_callback'], array_intersect_key($this->filters_form->exportValues(), array_flip($chained_prev_ids))):array();
-				
-				$chained[$k] = array($k, $chained_prev_ids, $v['chained']['url'], $chained_params);
+				$v['select_options'] = is_callable($v['chained']['select_options_callback'])? call_user_func_array($v['chained']['select_options_callback'], array_intersect_key($this->filters_form->validate()?$this->filters_form->exportValues():$this->get_filter_values($defaults), array_flip($chained_prev_ids))):array();
+
+				$chained[$k] = array($k, $chained_prev_ids, $v['chained']['url'], $chained_params, $defaults[$k]);
 			}
 			
 			$attr = array_merge(array('id'=>$k), $v['attr']);
@@ -241,11 +240,13 @@ class Utils_Overview extends Module {
 					$this->filters_form->addElement($v['type'], $k, _V($v['title']), $v['select_options'], $attr);
 					if ($v['type'] == 'checkbox') $checkboxes[$k] = 0;
 				break;
-			}						
-		}
+			}			
+			if (isset($v['required']) && $v['required'])
+				$this->filters_form->addRule($k, __('Field required'), 'required');
+		}	
 		
 		$filter_values = ($this->filters_form->validate() && $this->filters_form->exportValue('submited'))? $this->filters_form->exportValues(): $this->get_filter_values($defaults);
-		
+
 		$filter_values = array_merge($checkboxes, $filter_values);
 
 		$this->set_filter_values($filter_values);
@@ -268,10 +269,10 @@ class Utils_Overview extends Module {
 		$this->hide_filters |= !$form_visible; 
 	}
 	
-	public function get_submit_form_href() {
+	public function get_submit_form_href($submited=true, $indicator=null) {
 		if (!isset($this->filters_form) || !($this->filters_form instanceof Libs_QuickForm)) return '';
 		
-		return 'href="javascript:void(0)" onclick="' . $this->filters_form->get_submit_form_js() . '"';
+		return 'href="javascript:void(0)" onclick="' . $this->filters_form->get_submit_form_js($submited, $indicator) . '"';
 	}
 	
 	public function is_filters_form_submitted() {
@@ -316,12 +317,6 @@ class Utils_Overview extends Module {
 	public function get_back_button($default=false) {
 		return $this->get_module_variable('back_button', $default);
 	}
-	
-	public function back() {
-		$x = ModuleManager::get_instance('/Base_Box|0');
-		if(!$x) trigger_error('There is no base box module instance',E_USER_ERROR);
-		return $x->pop_main();
-	}
 
 	public function set_icon($icon) {
 		$this->icon = $icon;
@@ -347,7 +342,8 @@ class Utils_Overview extends Module {
 		$this->display_modes = $display_modes;
 
 		if (!array_key_exists($default_mode, $display_modes)) {
-			$default_mode = reset(array_keys($display_modes));
+			$display_mode_keys = array_keys($display_modes);
+			$default_mode = array_shift($display_mode_keys);
 		}
 		$mode = $this->get_mode($default_mode);
 
