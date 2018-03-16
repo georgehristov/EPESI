@@ -13,6 +13,9 @@
 defined("_VALID_ACCESS") || die();
 
 class Utils_RecordBrowser extends Module {
+    /**
+     * @var array[Utils_RecordBrowser_Field_Interface]
+     */
     private $table_rows = array();
     private $browse_mode;
     private $display_callback_table = array();
@@ -1478,49 +1481,22 @@ class Utils_RecordBrowser extends Module {
 	    $form->addFormRule(array($this, 'check_new_record_access'));
         $fields_by_processing_order = $this->table_rows;
         uasort($fields_by_processing_order, array(__CLASS__, 'sort_by_processing_order'));
-        foreach($fields_by_processing_order as $field => $args){
+        foreach($fields_by_processing_order as $field => $desc){
             // check permissions
             if ($this->view_fields_permission === false ||
-                (isset($this->view_fields_permission[$args['id']])
-                 && !$this->view_fields_permission[$args['id']])) continue;
+                (isset($this->view_fields_permission[$desc['id']])
+                 && !$this->view_fields_permission[$desc['id']])) continue;
             // check visible cols
-            if ($visible_cols!==null && !isset($visible_cols[$args['id']])) continue;
+            if ($visible_cols!==null && !isset($visible_cols[$desc['id']])) continue;
             // set default value to '' if not set at all
-            if (!isset($record[$args['id']])) $record[$args['id']] = '';
+            if (!isset($record[$desc['id']])) $record[$desc['id']] = '';
             if ($for_grid) {
-                $nk = '__grid_'.$args['id'];
-                $record[$nk] = $record[$args['id']];
-                $args['id'] = $nk;
-            }
-            if ($args['type']=='hidden') {
-                $form->addElement('hidden', $args['id']);
-                $form->setDefaults(array($args['id']=>$record[$args['id']]));
-                continue;
-            }
-            // is set then hide empty fields that are not checkboxes
-			if ($mode == 'view' && $args['type'] != 'checkbox' && Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(),'hide_empty') && $this->field_is_empty($record, $args['id'])) {
-				eval_js('var e=$("_'.$args['id'].'__data");if(e)e.up("tr").style.display="none";');
-			}
-            // translate label and put it into span with id
-            $label = '<span id="_'.$args['id'].'__label">'._V($args['name']).'</span>'; // TRSL
-            if (isset($this->QFfield_callback_table[$field])) {
-				//$label = Utils_RecordBrowserCommon::get_field_tooltip($label, $args['type']);
-                $ff = $this->QFfield_callback_table[$field];
-            } else {
-                $ff = Utils_RecordBrowserCommon::get_default_QFfield_callback($args['type']);
+                $nk = '__grid_'.$desc['id'];
+                $record[$nk] = $record[$desc['id']];
+                $desc['id'] = $nk;
             }
 
-            Utils_RecordBrowserCommon::call_QFfield_callback($ff,$form, $args['id'], $label, $mode, $mode=='add'?(isset($this->custom_defaults[$args['id']])?$this->custom_defaults[$args['id']]:''):$record[$args['id']], $args, $this, $this->display_callback_table);
-
-            if ($args['required']) {
-                $el = $form->getElement($args['id']);
-                if (!$form->isError($el)) {
-                    if ($el->getType() != 'static') {
-                        $form->addRule($args['id'], __('Field required'), 'required');
-                        $el->setAttribute('placeholder', __('Field required'));
-                    }
-                }
-            }
+            $desc->createQFfield($form, $mode, $record, $this->custom_defaults, $this, $this->display_callback_table);
         }
     }
     public function update_record($id,$values) {
