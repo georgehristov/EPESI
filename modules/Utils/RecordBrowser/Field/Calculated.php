@@ -25,30 +25,6 @@ class Utils_RecordBrowser_Field_Calculated extends Utils_RecordBrowser_Field_Ins
 		return true;
 	}
 	
-	public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-		if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-		
-		$field = $this->getId();
-		$label = $this->getTooltip($this->getLabel());
-		$desc = $this;		
-	
-		$form->addElement('static', $field, $label);
-		if (!is_array($rb_obj->record))
-			$values = $rb_obj->custom_defaults;
-		else {
-			$values = $rb_obj->record;
-			if (is_array($rb_obj->custom_defaults))
-				$values = $values + $rb_obj->custom_defaults;
-		}
-		$val = isset($values[$field]) ?
-		Utils_RecordBrowserCommon::get_val($rb_obj->tab, $field, $values, true, $desc)
-		: '';
-		if (!$val)
-			$val = '[' . __('formula') . ']';
-		$record_id = isset($rb_obj->record['id']) ? $rb_obj->record['id'] : null;
-		$form->setDefaults(array($field => '<div class="static_field" id="' . Utils_RecordBrowserCommon::get_calculated_id($rb_obj->tab, $field, $record_id) . '">' . $val . '</div>'));
-	}
-	
     public function getSqlOrder($direction, $tab_alias='') {
     	$param = explode('::', $this->getParam());
     	if (isset($param[1]) && $param[1] != '') {

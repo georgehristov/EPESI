@@ -43,7 +43,7 @@ interface Utils_RecordBrowser_Field_Interface {
 	
 	public function defaultDisplay($record, $nolink=false);
 	
-	public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null);
+	public function defaultQFfieldCallback();
 	
 	public function getSqlId($tabAlias='');
 	
@@ -287,14 +287,10 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		if ($mode == 'view' && Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(),'hide_empty') && $this->isEmpty($record)) {
 			eval_js('var e=jq("#_'.$this->getId().'__data");if(e.length)e.closest("tr").hide();');
 		}
-		
-		$label = '<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>';
-		$default = ($mode=='add')? ($custom_defaults[$this->getId()]?? ''):$record[$this->getId()];
-		
-		if (is_callable($this->QFfield_callback))
-			call_user_func_array($this->QFfield_callback, array($form, $this->getId(), $label, $mode, $default, $this, $rb_obj, $display_callback_table));
-		else
-			$this->defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table);
+				
+		$default = ($mode=='add')? ($custom_defaults[$this->getId()]?? ''): $record[$this->getId()];
+
+		$this->callQFfieldCallback($form, $mode, $default, $rb_obj, $display_callback_table);
 				
 		if ($this->isRequired()) {
 			$el = $form->getElement($this->getId());
@@ -313,7 +309,19 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return $record[$this->getId()]=='';
 	}
 	
-	public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {}
+	public function callQFfieldCallback($form, $mode, $default, $rb_obj, $display_callback_table = null) {
+		$callback = is_callable($this->QFfield_callback)? $this->QFfield_callback: $this->defaultQFfieldCallback();
+		
+		if (!is_callable($callback)) return;
+
+		$label = '<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>';
+		
+		$callback($form, $this->getId(), $label, $mode, $default, $this, $rb_obj, $display_callback_table);
+	}
+	
+	public function defaultQFfieldCallback() {
+		return [Utils_RecordBrowser_FieldCommon::class, 'QFfield_' . $this->getType()];
+	}	
 	
 	public function createQFfieldStatic($form, $mode, $default, $rb_obj) {
 		if ($mode !== 'add' && $mode !== 'edit') {

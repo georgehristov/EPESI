@@ -4,18 +4,6 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Field_Integer extends Utils_RecordBrowser_Field_Instance {
 	
-    public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-    	if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-    	
-    	$field = $this->getId();
-    	$label = $this->getTooltip($this->getLabel());
-       
-        $form->addElement('text', $field, $label, ['id' => $field]);
-        $form->addRule($field, __('Only integer numbers are allowed.'), 'regex', '/^\-?[0-9]*$/');
-        if ($mode !== 'add')
-            $form->setDefaults([$field => $default]);
-    }
-        
     public function handleCrits($operator, $value, $tab_alias='') {
     	$field = $this->getSqlId($tab_alias);
     	 

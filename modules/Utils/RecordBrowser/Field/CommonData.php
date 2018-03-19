@@ -5,36 +5,6 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Instance {
 	protected $multiselect = false;
 	
-    public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-    	if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-    	
-    	$field = $this->getId();
-    	$desc = $this;
-    	$param = $this->getParam();
-    	$label = $this->getTooltip($this->getLabel(), $param['array_id']);
-       
-        $param = explode('::', $desc['param']['array_id']);
-        foreach ($param as $k => $v)
-            if ($k != 0)
-                $param[$k] = self::getFieldId($v);
-        $form->addElement($desc['type'], $field, $label, $param, ['empty_option' => true, 'order' => $desc['param']['order']], ['id' => $field]);
-        if ($mode !== 'add')
-            $form->setDefaults([$field => $default]);
-    }
-    
-    public function defaultDisplay($record, $nolink=false) {
-    	$ret = '';
-    	if (isset($record[$this->getId()]) && $record[$this->getId()]!=='') {
-    		$arr = explode('::', $this['param']['array_id']);
-    		$path = array_shift($arr);
-    		foreach($arr as $v) $path .= '/' . $record[self::getFieldId($v)];
-    		$path .= '/' . $record[$this->getId()];
-    		$ret = Utils_CommonDataCommon::get_value($path, true);
-    	}
-    	 
-    	return $ret;
-    }
-    
     public static function decodeParam($param) {
     	$param = explode('__',$param);
     	if (isset($param[1])) {

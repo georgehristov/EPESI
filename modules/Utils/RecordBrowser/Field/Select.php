@@ -3,7 +3,7 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instance {
-	protected static $options_limit = 50;
+	public static $options_limit = 50;
 	protected $multiselect = false;
 	protected $single_tab = false;
 	protected $record_count = 0;
@@ -22,36 +22,7 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		return true;
 	}
 	
-	public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-		if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-		
-		$field = $this->getId();
-		$label = $this->getTooltip($this->getLabel());
-		$desc = $this;
-		
-		$record = $rb_obj->record;
-		$param = $this->getParam();
-		$multi_adv_params = $this->callAdvParamsCallback($record);
-		$format_callback = $multi_adv_params['format_callback'];
-		
-		$tab_crits = $this->getSelectTabCrits($record);
-		$select_options = $this->getSelectOptions($record);
-		
-		if($param['single_tab'])
-			$label = Utils_RecordBrowserCommon::get_field_tooltip($label, $desc['type'], $param['single_tab'], $tab_crits[$param['single_tab']]);
-			
-		if ($this->record_count > self::$options_limit) {
-			$form->addElement('autoselect', $field, $label, $select_options, array(array('Utils_RecordBrowserCommon', 'automulti_suggestbox'), array($rb_obj->tab, $tab_crits, $format_callback, $desc['param'])), $format_callback);
-		}
-		else {
-			$select_options = array('' => '---') + $select_options;
-			$form->addElement('select', $field, $label, $select_options, array('id' => $field));
-		}
-		if ($mode !== 'add')
-			$form->setDefaults(array($field => $default));
-	}
-	
-	protected function getSelectOptions($record=null) {
+	public function getSelectOptions($record=null) {
 		$ret = array();
 		
 		$multi_adv_params = $this->callAdvParamsCallback($record);
@@ -90,7 +61,7 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		return $ret;
 	}
 	
-	protected function callAdvParamsCallback($record=null) {
+	public function callAdvParamsCallback($record=null) {
 		static $cache = null;
 		
 		$key = md5(serialize($record));
@@ -109,10 +80,10 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		if (is_callable($callback))
 			$adv_params = call_user_func($callback, $record);
 			
-			if (!is_array($adv_params))
-				$adv_params = array();
+		if (!is_array($adv_params))
+			$adv_params = array();
 				
-				return $cache[$key] = array_merge($ret, $adv_params);
+		return $cache[$key] = array_merge($ret, $adv_params);
 	}
 	
 	public static function callSelectItemFormatCallback($callback, $tab_id, $args) {
@@ -138,7 +109,7 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		return $tab_caption . call_user_func($callback, $tab_id, $args);
 	}
 	
-	protected function getSelectTabCrits($record=null) {
+	public function getSelectTabCrits($record=null) {
 		static $cache = null;
 		
 		$key = md5(serialize($record));
@@ -182,69 +153,6 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 			}
 			
 			return $cache[$key] = $ret;
-	}
-	
-	public function defaultDisplay($record, $nolink=false) {
-		$desc = $this;
-		
-		$ret = '---';
-		if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
-			$val = $record[$desc['id']];
-			$commondata_sep = '/';
-			if ((is_array($val) && empty($val))) return $ret;
-			
-			$param = self::decodeParam($desc['param']);
-			
-			if(!$param['array_id'] && $param['single_tab'] == '__COMMON__') return;
-			
-			if (!is_array($val)) $val = array($val);
-			
-			$ret = '';
-			foreach ($val as $v) {
-				$ret .= ($ret!=='')? '<br>': '';
-				
-				if ($param['single_tab'] == '__COMMON__') {
-					$array_id = $param['array_id'];
-					$path = explode('/', $v);
-					$tooltip = '';
-					$res = '';
-					if (count($path) > 1) {
-						$res .= Utils_CommonDataCommon::get_value($array_id . '/' . $path[0], true);
-						if (count($path) > 2) {
-							$res .= $commondata_sep . '...';
-							$tooltip = '';
-							$full_path = $array_id;
-							foreach ($path as $w) {
-								$full_path .= '/' . $w;
-								$tooltip .= ($tooltip? $commondata_sep: '').Utils_CommonDataCommon::get_value($full_path, true);
-							}
-						}
-						$res .= $commondata_sep;
-					}
-					$label = Utils_CommonDataCommon::get_value($array_id . '/' . $v, true);
-					if (!$label) continue;
-					$res .= $label;
-					$res = Utils_RecordBrowserCommon::no_wrap($res);
-					if ($tooltip) $res = '<span '.Utils_TooltipCommon::open_tag_attrs($tooltip, false) . '>' . $res . '</span>';
-				} else {
-					$tab_id = Utils_RecordBrowserCommon::decode_record_token($v, $param['single_tab']);
-					
-					if (!$tab_id) continue;
-					
-					list($select_tab, $id) = $tab_id;
-					
-					if(Utils_RecordBrowserCommon::get_description_callback($this->getTab()) || empty($param['cols'])) {
-						$res = Utils_RecordBrowserCommon::create_default_linked_label($select_tab, $id, $nolink, !$param['single_tab']);
-					} else {
-						$res = Utils_RecordBrowserCommon::create_linked_label($select_tab, $param['cols'], $id, $nolink);
-					}
-				}
-				
-				$ret .= $res;
-			}
-		}
-		
-		return $ret;
 	}
 	
 	public static function decodeParam($param) {
@@ -295,8 +203,8 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 	public function getSqlOrder($direction, $tab_alias='') {
 		$field_sql_id = $this->getSqlId($tab_alias);
 		
-		$tab2 = $desc['select']['single_tab'];
-		$cols2 = $desc['select']['cols'];
+		$tab2 = $this['select']['single_tab'];
+		$cols2 = $this['select']['cols'];
 		$val = $field_sql_id;
 		$fields2 = Utils_RecordBrowserCommon::init($tab2);
 		// search for better sorting than id

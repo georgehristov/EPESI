@@ -4,17 +4,6 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Field_Checkbox extends Utils_RecordBrowser_Field_Instance {
 	
-    public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-    	if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-    	
-    	$field = $this->getId();
-    	
-    	$el = $form->addElement('advcheckbox', $field, $this->getLabel(), '', ['id' => $field]);
-        $el->setValues(['0','1']);
-        if ($mode !== 'add')
-            $form->setDefaults([$field => $default]);
-    }
-    
     public function isEmpty($record) {
     	 return false;
     }
@@ -27,15 +16,6 @@ class Utils_RecordBrowser_Field_Checkbox extends Utils_RecordBrowser_Field_Insta
     	return isset($rb_obj->display_callback_table[$this->getId()])? parent::createQFfieldStatic($form, $mode, $default, $rb_obj): false;
     }
     
-    public function defaultDisplay($record, $nolink=false) {
-    	$ret = '';
-    	if (isset($record[$this->getId()]) && $record[$this->getId()]!=='') {
-    		$ret = $record[$this->getId()]? __('Yes'): __('No');
-    	}
-    
-    	return $ret;
-    }    
-
     public function handleCrits($operator, $value, $tab_alias='') {
     	$field = $this->getSqlId($tab_alias);
     

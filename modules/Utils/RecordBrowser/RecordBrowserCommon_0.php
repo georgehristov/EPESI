@@ -2978,84 +2978,72 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return null;
     }
     
-    public static function QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	//backward compatibility for default QFfield callbacks
-    	return $desc->defaultQFfield($form, $mode, $default, $rb_obj);
-    }
-    
     public static function QFfield_static_display(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-        if ($mode !== 'add' && $mode !== 'edit') {
-            if ($desc['type'] != 'checkbox' || isset($rb_obj->display_callback_table[$field])) {
-                $def = self::get_val($rb_obj->tab, $field, $rb_obj->record, false, $desc);
-                $form->addElement('static', $field, $label, $def, array('id' => $field));
-                return true;
-            }
-        }
-        return false;
+    	return Utils_RecordBrowser_FieldCommon::QFfield_static_display($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_hidden(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-        self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_hidden($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_checkbox(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_checkbox($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_calculated(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_calculated($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_integer(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_integer($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_float(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_float($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_currency(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_currency($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_text(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_text($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_long_text(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_long_text($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_date(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_date($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_timestamp(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_timestamp($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_time(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_time($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_commondata(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_commondata($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_select(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_default($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_select($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
     public static function QFfield_multiselect(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-        self::QFfield_select($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_multiselect($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
     
     public static function QFfield_multicommondata(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-        self::QFfield_select($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_multicommondata($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
     
     public static function QFfield_autonumber(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	self::QFfield_select($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	Utils_RecordBrowser_FieldCommon::QFfield_autonumber($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
 
 	//region File
@@ -3077,7 +3065,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	}
 
 	public static function QFfield_file(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-		self::QFfield_select($form, $field, $label, $mode, $default, $desc, $rb_obj);
+		Utils_RecordBrowser_FieldCommon::QFfield_file($form, $field, $label, $mode, $default, $desc, $rb_obj);
 	}
 	//endregion
     

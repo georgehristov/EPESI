@@ -4,79 +4,7 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Field_MultiCommonData extends Utils_RecordBrowser_Field_CommonData {
 	protected $multiselect = true;
-	
-	public function __construct($desc = null) {
-		parent::__construct($desc);
-		
-		//backward compatibility for creating form elements
-		$this->type = 'multiselect';
-	}
-	
-    public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-    	if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-    	
-    	$field = $this->getId();
-    	$param = $this->getParam();
-    	$label = $this->getTooltip($this->getLabel(), $param['array_id']);
-       
-        if (empty($param['array_id']))
-        		trigger_error("Commondata array id not set for field: $field", E_USER_ERROR);
-        
-        $select_options = Utils_CommonDataCommon::get_translated_tree($param['array_id'], $param['order']);
-        if (!is_array($select_options))
-        	$select_options = array();
-            
-        $form->addElement('multiselect', $field, $label, $select_options, ['id' => $field]);
 
-        if ($mode !== 'add')
-            $form->setDefaults([$field => $default]);
-    }
-    
-    public function defaultDisplay($record, $nolink=false) {
-    	$ret = '---';
-    	
-    	$desc = $this;
-    	$param = $this->param;
-    	if (isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
-    		$val = $record[$desc['id']];
-    		$commondata_sep = '/';
-    		if ((is_array($val) && empty($val)) || !$param['array_id']) return $ret;
-    	
-    		if (!is_array($val)) $val = array($val);
-    	
-    		$ret = '';
-    		foreach ($val as $v) {
-    			$ret .= ($ret!=='')? '<br>': '';
-    			
-		    	$array_id = $param['array_id'];
-		    	$path = explode('/', $v);
-		    	$tooltip = '';
-		    	$res = '';
-		    	if (count($path) > 1) {
-		    		$res .= Utils_CommonDataCommon::get_value($array_id . '/' . $path[0], true);
-		    		if (count($path) > 2) {
-		    			$res .= $commondata_sep . '...';
-		    			$tooltip = '';
-		    			$full_path = $array_id;
-		    			foreach ($path as $w) {
-		    				$full_path .= '/' . $w;
-		    				$tooltip .= ($tooltip? $commondata_sep: '').Utils_CommonDataCommon::get_value($full_path, true);
-		    			}
-		    			}
-		    			$res .= $commondata_sep;
-		    		}
-		   		$label = Utils_CommonDataCommon::get_value($array_id . '/' . $v, true);
-		   		if (!$label) continue;
-		   		$res .= $label;    				
-		   		$res = Utils_RecordBrowserCommon::no_wrap($res);
-		   		if ($tooltip) $res = '<span '.Utils_TooltipCommon::open_tag_attrs($tooltip, false) . '>' . $res . '</span>';
-    		
-		   		$ret .= $res;
-    		}
-    	}
-    	return $ret;
-    }
-    
     public static function decodeParam($param) {
     	if (is_array($param)) return $param;
 

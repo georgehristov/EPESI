@@ -4,33 +4,6 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Field_Currency extends Utils_RecordBrowser_Field_Instance {
 	
-    public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-    	if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-    	
-    	$field = $this->getId();
-    	$label = $this->getTooltip($this->getLabel());
-    	$desc = $this;    	
-        
-        $form->addElement('currency', $field, $label, (isset($desc['param']) && is_array($desc['param']))?$desc['param']:array(), array('id' => $field));
-        if ($mode !== 'add')
-            $form->setDefaults(array($field => $default));
-        // set element value to persist currency over soft submit
-        if ($form->isSubmitted() && $form->exportValue('submited') == false) {
-            $default = $form->exportValue($field);
-            $form->getElement($field)->setValue($default);
-        }
-    }
-    
-    public function defaultDisplay($record, $nolink=false) {
-    	$ret = '';
-    	if (isset($record[$this->getId()]) && $record[$this->getId()]!=='') {
-    		$val = Utils_CurrencyFieldCommon::get_values($record[$this->getId()]);
-            $ret = Utils_CurrencyFieldCommon::format($val[0], $val[1]);
-    	}
-    	 
-    	return $ret;
-    }
-    
     public function getSqlOrder($direction, $tab_alias='') {
     	$field_sql_id = $this->getSqlId($tab_alias);
     	

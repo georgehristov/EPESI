@@ -4,21 +4,6 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Field_Autonumber extends Utils_RecordBrowser_Field_Instance {
 	
-	public function defaultQFfield($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-		if ($this->createQFfieldStatic($form, $mode, $default, $rb_obj)) return;
-
-		$field = $this->getId();
-		$param = $this->getParam();
-		$label = $this->getTooltip($this->getLabel());
-		
-		$value = $default ?: self::formatStr($param, null);
-		$form->addElement('static', $field, $label);
-		$record_id = $rb_obj->record['id']?? null;
-		$field_id = Utils_RecordBrowserCommon::get_calculated_id($rb_obj->tab, $field, $record_id);
-		$val = '<div class="static_field" id="' . $field_id . '">' . $value . '</div>';
-		$form->setDefaults([$field => $val]);
-	}
-	
 	public function getQuickjump($advanced = false) {
     	return true;
     }
