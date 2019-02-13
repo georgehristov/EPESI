@@ -843,35 +843,11 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return $ret;
     }
 
+    /**
+     * @deprecated
+     */
     public static function actual_db_type($type, $param=null) {
-        $f = '';
-        switch ($type) {
-            case 'page_split': $f = ''; break;
-
-            case 'text': $f = DB::dict()->ActualType('C').'('.$param.')'; break;
-            case 'select': 
-            	$param = self::decode_select_param($param);
-                if($param['single_tab']) $f = DB::dict()->ActualType('I4'); 
-                else $f = DB::dict()->ActualType('X'); 
-                break;
-            case 'multiselect': $f = DB::dict()->ActualType('X'); break;
-            case 'multicommondata': $f = DB::dict()->ActualType('X'); break;
-            case 'commondata': $f = DB::dict()->ActualType('C').'(128)'; break;
-            case 'integer': $f = DB::dict()->ActualType('I4'); break;
-            case 'float': $f = DB::dict()->ActualType('F'); break;
-            case 'date': $f = DB::dict()->ActualType('D'); break;
-            case 'timestamp': $f = DB::dict()->ActualType('T'); break;
-            case 'time': $f = DB::dict()->ActualType('T'); break;
-            case 'long text': $f = DB::dict()->ActualType('X'); break;
-            case 'hidden': $f = (isset($param)?$param:''); break;
-            case 'calculated': $f = (isset($param)?$param:''); break;
-            case 'checkbox': $f = DB::dict()->ActualType('I1'); break;
-            case 'currency': $f = DB::dict()->ActualType('C').'(128)'; break;
-            case 'autonumber': $len = strlen(self::format_autonumber_str($param, null));
-                $f = DB::dict()->ActualType('C') . "($len)"; break;
-	        case 'file': $f = DB::dict()->ActualType('X'); break;
-        }
-        return $f;
+    	return Utils_RecordBrowser_FieldCommon::actual_db_type($type, $param);
     }
     public static function new_browse_mode_details_callback($tab, $mod, $func) {
         self::check_table_name($tab);

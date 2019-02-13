@@ -586,6 +586,37 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 		}
 		$dropzoneField->add_to_form($form, $desc->getId(), $desc->getLabel());
 	}
+	
+	public static function actual_db_type($type, $param=null) {
+		$f = '';
+		switch ($type) {
+			case 'page_split': $f = ''; break;
+			
+			case 'text': $f = DB::dict()->ActualType('C').'('.($param?:'50').')'; break;
+			case 'select':
+				$param = self::decode_select_param($param);
+				if($param['single_tab']) $f = DB::dict()->ActualType('I4');
+				else $f = DB::dict()->ActualType('X');
+				break;
+			case 'multiselect': $f = DB::dict()->ActualType('X'); break;
+			case 'multicommondata': $f = DB::dict()->ActualType('X'); break;
+			case 'commondata': $f = DB::dict()->ActualType('C').'(128)'; break;
+			case 'integer': $f = DB::dict()->ActualType('I4'); break;
+			case 'float': $f = DB::dict()->ActualType('F'); break;
+			case 'date': $f = DB::dict()->ActualType('D'); break;
+			case 'timestamp': $f = DB::dict()->ActualType('T'); break;
+			case 'time': $f = DB::dict()->ActualType('T'); break;
+			case 'long text': $f = DB::dict()->ActualType('X'); break;
+			case 'hidden': $f = ($param?:''); break;
+			case 'calculated': $f = ($param?:''); break;
+			case 'checkbox': $f = DB::dict()->ActualType('I1'); break;
+			case 'currency': $f = DB::dict()->ActualType('C').'(128)'; break;
+			case 'autonumber': $len = strlen(Utils_RecordBrowser_Field_Autonumber::formatStr($param, null));
+			$f = DB::dict()->ActualType('C') . "($len)"; break;
+			case 'file': $f = DB::dict()->ActualType('X'); break;
+		}
+		return $f;
+	}
 }
 
 Utils_RecordBrowser_FieldCommon::register([
