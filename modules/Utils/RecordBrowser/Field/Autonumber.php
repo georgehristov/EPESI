@@ -18,9 +18,8 @@ class Utils_RecordBrowser_Field_Autonumber extends Utils_RecordBrowser_Field_Ins
     	$parsed = explode('__', $param, 4);
     	if (!is_array($parsed) || count($parsed) != 3)
     		trigger_error("Not well formed autonumber parameter: $param", E_USER_ERROR);
-    	list($prefix, $pad_length, $pad_mask) = $parsed;
     	
-    	return compact('prefix', 'pad_length', 'pad_mask');
+    	return array_combine(['prefix', 'pad_length', 'pad_mask'], $parsed);
     }
     
     public function processAddedValue($value, $record) {
@@ -35,5 +34,9 @@ class Utils_RecordBrowser_Field_Autonumber extends Utils_RecordBrowser_Field_Ins
     	if ($id === null)
     		$param['pad_mask'] = '?';
     	return $param['prefix'] . str_pad($id, $param['pad_length'], $param['pad_mask'], STR_PAD_LEFT);
+    }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('This field is not editable');
     }
 }

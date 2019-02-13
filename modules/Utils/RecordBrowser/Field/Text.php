@@ -11,4 +11,19 @@ class Utils_RecordBrowser_Field_Text extends Utils_RecordBrowser_Field_Instance 
     public static function decodeValue($value, $htmlspecialchars = true) {
     	return $htmlspecialchars? htmlspecialchars($value): $value;
     }
+    
+    public function getAjaxTooltipOpts() {
+    	return [
+    			'maxlength' => $this->getParam()
+    	];
+    }
+    
+    public static function getAjaxTooltip($opts) {
+    	$ret = __('Enter the text in the text field');
+    	
+    	if (isset($opts['maxlength']) && is_numeric($opts['maxlength'])) 
+    		$ret .= '<br />'.__('Maximum allowed length is %s characters', ['<b>'.$opts['maxlength'].'</b>']);
+    	
+    	return $ret;
+    }
 }

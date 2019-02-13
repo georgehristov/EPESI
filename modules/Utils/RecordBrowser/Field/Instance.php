@@ -354,16 +354,22 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return [Utils_RecordBrowser_FieldCommon::class, 'display_' . $this->getType()];
 	}
 	
-	public final function getTooltip($label) {
+	public final function getTooltip($label = null) {
+		$label = $label?: $this->getLabel();
+		
 		if(strpos($label,'Utils_Tooltip')!==false) return $label;
 		$args = func_get_args();
 		array_shift($args);
 		array_unshift($args, $this->getType());
-		return Utils_TooltipCommon::ajax_create($label, array(__CLASS__, 'ajaxGetTooltip'), array($args));
+		return Utils_TooltipCommon::ajax_create($label, [static::class, 'getAjaxTooltip'], [$this->getAjaxTooltipOpts()]);
 	}
 	
-	public static function ajaxGetTooltip($type) {
-		return call_user_func_array(['Utils_RecordBrowserCommon', 'ajax_get_field_tooltip'], func_get_args());
+	public function getAjaxTooltipOpts() {
+		return [];
+	}
+	
+	public static function getAjaxTooltip($opts) {
+		return __('No additional information');
 	}
 	
 	public function getName() {

@@ -109,4 +109,19 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
     public function isSearchable($advanced = false) {
     	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
     }
+    
+    public function getAjaxTooltipOpts() {
+    	return [
+    			'param' => $this->getParam()
+    	];
+    }
+    
+    public static function getAjaxTooltip($opts) {
+    	$ret = __('Select value');
+
+    	if (isset($opts['param']['array_id']))
+    		$ret .= ' '.__('from %s table', ['<b>'.str_replace('_', '/', $opts['param']['array_id']).'</b>']);
+    	
+    	return $ret;
+    }
 }

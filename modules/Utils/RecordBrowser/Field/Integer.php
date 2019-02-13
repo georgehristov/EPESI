@@ -24,4 +24,8 @@ class Utils_RecordBrowser_Field_Integer extends Utils_RecordBrowser_Field_Instan
     public function isSearchable($advanced = false) {
     	return false;
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter a numeric value in the text field');
+    }
 }

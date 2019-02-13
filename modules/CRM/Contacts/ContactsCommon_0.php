@@ -560,7 +560,7 @@ class CRM_ContactsCommon extends ModuleCommon {
                 }
                 uasort($cont, array('CRM_ContactsCommon', 'compare_names'));
             }
-			$label = Utils_RecordBrowserCommon::get_field_tooltip($label, $desc['type'], 'contact', $crits);
+			$label = $desc->getTooltip($label);
             if ($desc['type']=='select') {
                 if (is_numeric($limit)) {
                     unset($cont['']);
@@ -686,7 +686,7 @@ class CRM_ContactsCommon extends ModuleCommon {
                 }
                 if ($desc['type']!=='multiselect') $comp = array($key => '---') + $comp;
             }
-			$label = Utils_RecordBrowserCommon::get_field_tooltip($label, $desc['type'], 'company', $crits);
+			$label = $desc->getTooltip($label);
             if ($count>Utils_RecordBrowserCommon::$options_limit) {
                 $callback = array('CRM_ContactsCommon','display_company');
                 if ($desc['type']!=='multiselect')

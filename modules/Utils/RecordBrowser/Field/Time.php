@@ -37,4 +37,9 @@ class Utils_RecordBrowser_Field_Time extends Utils_RecordBrowser_Field_Instance 
     public function isSearchable($advanced = false) {
     	return false;
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter the time using select elements') . '<br />' . 
+    		__('You can change 12/24-hour format in Control Panel, Regional Settings');
+    }    
 }

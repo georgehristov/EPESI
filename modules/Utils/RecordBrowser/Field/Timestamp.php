@@ -35,4 +35,11 @@ class Utils_RecordBrowser_Field_Timestamp extends Utils_RecordBrowser_Field_Inst
     public function isSearchable($advanced = false) {
     	return false;
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter the date in your selected format and the time using select elements') . '<br />' .
+    		__('Click on the text field to bring up a popup Calendar that allows you to pick the date') . '<br />' .
+    		__('Click again on the text field to close popup Calendar') . '<br />' .
+    		__('You can change 12/24-hour format in Control Panel, Regional Settings');
+    }
 }

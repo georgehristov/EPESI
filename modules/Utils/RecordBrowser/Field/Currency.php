@@ -48,4 +48,8 @@ class Utils_RecordBrowser_Field_Currency extends Utils_RecordBrowser_Field_Insta
     public function isSearchable($advanced = false) {
     	return false;
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter the amount in text field and select currency');
+    }
 }

@@ -39,4 +39,10 @@ class Utils_RecordBrowser_Field_Date extends Utils_RecordBrowser_Field_Instance 
     public function getSearchType($advanced = false) {
     	return 'datepicker';
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter the date in your selected format') . '<br />' .
+      		__('Click on the text field to bring up a popup Calendar that allows you to pick the date') . '<br />' .
+    		__('Click again on the text field to close popup Calendar');
+    }
 }

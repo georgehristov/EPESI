@@ -24,4 +24,8 @@ class Utils_RecordBrowser_Field_Float extends Utils_RecordBrowser_Field_Instance
     public function isSearchable($advanced = false) {
     	return false;
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter a numeric value in the text field');
+    }
 }

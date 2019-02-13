@@ -237,7 +237,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 	
 	public static function QFfield_checkbox(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 		
 		$el = $form->addElement('advcheckbox', $field, $label, '', ['id' => $field]);
 		$el->setValues(['0','1']);
@@ -250,7 +250,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$form->addElement('static', $field, $label);
 		if (!is_array($rb_obj->record))
@@ -274,7 +274,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$form->addElement('text', $field, $label, ['id' => $field]);
 		$form->addRule($field, __('Only integer numbers are allowed.'), 'regex', '/^\-?[0-9]*$/');
@@ -287,7 +287,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$form->addElement('text', $field, $label, ['id' => $field]);
 		$form->addRule($field, __('Only numbers are allowed.'), 'numeric');
@@ -300,7 +300,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$form->addElement('currency', $field, $label, (isset($desc['param']) && is_array($desc['param']))?$desc['param']:[], ['id' => $field]);
 		if ($mode !== 'add')
@@ -331,7 +331,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$form->addElement('textarea', $field, $label, ['id' => $field]);
 		if ($mode !== 'add')
@@ -343,7 +343,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$form->addElement('datepicker', $field, $label, ['id' => $field]);
 		if ($mode !== 'add')
@@ -355,7 +355,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$f_param = array('id' => $field);
 		if ($desc['param'])
@@ -381,7 +381,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			return;
 			
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 			
 		$time_format = Base_RegionalSettingsCommon::time_12h() ? 'h:i a' : 'H:i';
 		$lang_code = Base_LangCommon::get_lang_code();
@@ -432,7 +432,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 		if (!$desc instanceof Utils_RecordBrowser_Field_Select) return;
 		
 		$field = $desc->getId();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 
 		$record = $rb_obj->record;
 		$param = $desc->getParam();
@@ -538,7 +538,7 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 			
 		$field = $desc->getId();
 		$param = $desc->getParam();
-		$label = $desc->getTooltip($desc->getLabel());
+		$label = $desc->getTooltip($label);
 
 		$value = $default ?: Utils_RecordBrowser_Field_Autonumber::formatStr($param, null);
 		$form->addElement('static', $field, $label);

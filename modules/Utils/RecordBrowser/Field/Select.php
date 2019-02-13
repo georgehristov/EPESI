@@ -333,4 +333,23 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 	public function getQuickjump($advanced = false) {
 		return true;
 	}
+	
+	public function getAjaxTooltipOpts() {
+		return [
+				'tabCrits' => $this->getSelectTabCrits()
+		];
+	}
+	
+	public static function getAjaxTooltip($opts) {
+		$ret = '';
+		foreach ($opts['tabCrits']?? [] as $tab => $crits) {
+			$ret .= '<b>' . Utils_RecordBrowserCommon::get_caption($tab) . '</b>';
+			
+			if ($critsWords = Utils_RecordBrowserCommon::crits_to_words($tab, $crits)) {
+				$ret .= ' ' . __('for which') . '<br />&nbsp;&nbsp;&nbsp;' . $critsWords;
+			}
+		}
+
+		return __('Select one') . ($ret? ' ' . __('of') . ' ' . $ret: '');
+	}
 }

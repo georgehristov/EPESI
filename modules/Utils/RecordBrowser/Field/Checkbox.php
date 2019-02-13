@@ -45,4 +45,8 @@ class Utils_RecordBrowser_Field_Checkbox extends Utils_RecordBrowser_Field_Insta
     public function isSearchable($advanced = false) {
     	return false;
     }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Click to switch between checked/unchecked state');
+    }
 }

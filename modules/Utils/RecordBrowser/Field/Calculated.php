@@ -61,4 +61,8 @@ class Utils_RecordBrowser_Field_Calculated extends Utils_RecordBrowser_Field_Ins
     	
     	return array($this->getSqlId($tab_alias) . " $operator $value", array());
     }   
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('This field is not editable');
+    }
 }
