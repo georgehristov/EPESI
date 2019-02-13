@@ -37,12 +37,13 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 	}
 	
 	public static function register($type_or_list, $class = null) {
-		if (is_array($type_or_list)) {
-			self::$registry = array_merge(self::$registry, $type_or_list);
-			return;
+		if (!is_array($type_or_list)) {
+			if (!$class) trigger_error("Attempting to register field $type_or_list without associated class", E_USER_ERROR);
+			
+			$type_or_list = [$type_or_list => $class];
 		}
-		
-		self::$registry[$type_or_list] = $class;
+
+		self::$registry = array_merge(self::$registry, $type_or_list);
 	}
 	
 	public static function get_registered_fields() {
