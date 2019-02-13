@@ -53,6 +53,46 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         }
         return false;
     }
+    
+    public static function call_display_callback($callback, $record, $links_not_recommended, $field, $tab)
+    {
+    	$callback_func = self::callback_check_function($callback, true);
+    	if ($callback_func) {
+    		if (is_callable($callback_func)) {
+    			$ret = call_user_func($callback_func, $record, $links_not_recommended, $field, $tab);
+    		} else {
+    			$callback_str = (is_array($callback_func) ? implode('::', $callback_func) : $callback_func);
+    			trigger_error("Callback $callback_str for field: '$field[id]', recordset: '$tab' not found", E_USER_NOTICE);
+    			$ret = $record[$field['id']];
+    		}
+    	} else {
+    		ob_start();
+    		$ret = eval($callback);
+    		if($ret===false) trigger_error($callback,E_USER_ERROR);
+    		else print($ret);
+    		$ret = ob_get_contents();
+    		ob_end_clean();
+    	}
+    	return $ret;
+    }
+    
+    public static function call_QFfield_callback($callback, &$form, $field, $label, $mode, $default, $desc, $rb_obj, $display_callback_table = null)
+    {
+    	if ($display_callback_table === null) {
+    		$display_callback_table = self::display_callback_cache($rb_obj->tab);
+    	}
+    	$callback_func = self::callback_check_function($callback, true);
+    	if ($callback_func) {
+    		if (is_callable($callback_func)) {
+    			call_user_func_array($callback_func, array(&$form, $field, $label, $mode, $default, $desc, $rb_obj, $display_callback_table));
+    		} else {
+    			$callback_str = (is_array($callback_func) ? implode('::', $callback_func) : $callback_func);
+    			trigger_error("Callback $callback_str for field: '$field', recordset: '{$rb_obj->tab}' not found", E_USER_NOTICE);
+    		}
+    	} else {
+    		eval($callback);
+    	}
+    }
 
 	public static function get_val($tab, $field, $record, $nolink = false, $desc = null) {
         static $recurrence_call_stack = array();
