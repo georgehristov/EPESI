@@ -34,7 +34,7 @@ class Utils_RecordBrowser_Field_Time extends Utils_RecordBrowser_Field_Instance 
     	);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return false;
     }
     

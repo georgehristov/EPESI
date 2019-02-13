@@ -21,7 +21,7 @@ class Utils_RecordBrowser_Field_Integer extends Utils_RecordBrowser_Field_Instan
         return array($sql, $vals);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return false;
     }
     

@@ -326,7 +326,7 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		//TODO: add this
 	}
 	
-	public function isOrderable() {
+	public function isOrderPossible() {
 		return $this->single_tab? true: false;
 	}
 	

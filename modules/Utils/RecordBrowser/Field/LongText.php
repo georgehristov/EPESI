@@ -15,7 +15,7 @@ class Utils_RecordBrowser_Field_LongText extends Utils_RecordBrowser_Field_Insta
     	return $advanced;
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return $advanced;
     }
     

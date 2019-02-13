@@ -5,7 +5,7 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 class Utils_RecordBrowser_Field_MultiSelect extends Utils_RecordBrowser_Field_Select {
 	protected $multiselect = true;
 	
-	public function isOrderable() {
+	public function isOrderPossible() {
 		return false;
 	}	
 
@@ -13,7 +13,7 @@ class Utils_RecordBrowser_Field_MultiSelect extends Utils_RecordBrowser_Field_Se
 		return true;
 	}
 	
-	public function isSearchable($advanced = false){
+	public function isSearchPossible($advanced = false){
 		return true;
 	}
 	

@@ -16,12 +16,14 @@ interface Utils_RecordBrowser_Field_Interface {
 	public function getSearchType($advanced = false);
 	
 	public function getQuickjump($advanced = false);
+		
+	public function isOrderPossible();
+	
+	public function isSearchPossible($advanced = false);
+	
+	public function isRequiredPossible();
 	
 	public function isEmpty($record);
-	
-	public function isOrderable();
-	
-	public function isSearchable($advanced = false);
 	
 	public function isVisible();
 	
@@ -51,12 +53,27 @@ interface Utils_RecordBrowser_Field_Interface {
 	
 	public function getSqlOrder($direction, $tabAlias='');
 	
+	/**
+	 * @param string $operator
+	 * @param string|array $value
+	 * @param string $tabAlias
+	 * 
+	 * @return array $sql, $vals
+	 */
 	public function handleCrits($operator, $value, $tabAlias='');
 	
+	/**
+	 * @param string $operator
+	 * @param string|array $value
+	 * @param string $tabAlias
+	 *
+	 * @return array $sql, $vals
+	 */
 	public function handleCritsRawSql($operator, $value, $tabAlias='');
 }
 
 class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_RecordBrowser_Field_Interface {
+	protected $formElement = null;
 	
 	public function __construct($desc = null) {
 		$descDefault = [
@@ -89,10 +106,8 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 				'commondata_order' => null,
 				//<--- deprecated
 		];
-		
-		$desc = array_merge($descDefault, $desc);
-		
-		$desc = array_intersect_key($desc, $descDefault);
+
+		$desc = array_intersect_key(array_merge($descDefault, $desc), $descDefault);
 			
 		parent::__construct($desc, self::ARRAY_AS_PROPS);
 		
@@ -108,7 +123,7 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	 * @param boolean $admin
 	 * @return Utils_RecordBrowser_Field_Interface
 	 */
-	public function create($tab, $name_or_desc, $admin = false) {
+	public static function create($tab, $name_or_desc, $admin = false) {
 		$desc = is_string($name_or_desc)? self::getDesc($tab, $name_or_desc): $name_or_desc;
 		
 		if (!$desc) return [];
@@ -205,7 +220,7 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return Utils_RecordBrowserCommon::get_field_id($field_name);
 	}
 	
-	public function isOrderable() {
+	public function isOrderPossible() {
 		return true;
 	}
 	
@@ -220,7 +235,7 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return false;
 	}
 	
-	public function isSearchable($advanced = false) {
+	public function isSearchPossible($advanced = false) {
 		return $this->getSearchType($advanced)? true: false;
 	}
 	
@@ -229,7 +244,7 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	}
 	
 	public function getActualDbType() {
-		return Utils_RecordBrowserCommon::actual_db_type($this->getType(), $this->getParam());
+		return Utils_RecordBrowser_FieldCommon::actual_db_type($this->getType(), $this->getParam());
 	}
 	
 	public function getSqlType() {
@@ -264,10 +279,14 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return $param;
 	}
 	
+	public static function formatParam($param) {
+		return '';
+	}
+	
 	public function handleCrits($operator, $value, $tab_alias='') {
 		$field = $this->getSqlId($tab_alias);
 		
-		$vals = array();
+		$vals = [];
 		if ($operator == DB::like() && ($value == '%' || $value == '%%')) {
 			$sql = 'true';
 		} elseif (!$value) {
@@ -276,7 +295,7 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 			$sql = "$field $operator %s AND $field IS NOT NULL";
 			$vals[] = $value;
 		}
-		return array($sql, $vals);
+		return [$sql, $vals];
 	}
 	
 	public function handleCritsRawSql($operator, $value, $tab_alias='') {
@@ -288,10 +307,12 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 			eval_js('var e=jq("#_'.$this->getId().'__data");if(e.length)e.closest("tr").hide();');
 		}
 				
-		$default = ($mode=='add')? ($custom_defaults[$this->getId()]?? ''): $record[$this->getId()];
+		$default = ($mode=='add')? ($custom_defaults[$this->getId()]?? ''): ($record[$this->getId()]?? '');
 
 		$this->callQFfieldCallback($form, $mode, $default, $rb_obj, $display_callback_table);
 				
+		$this->formElement = $form->getElement($this->getId());
+		
 		if ($this->isRequired()) {
 			$el = $form->getElement($this->getId());
 			if (!$form->isError($el)) {
@@ -597,6 +618,10 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	
 	public function processAddedValue($value, $record) {
 		return $this->decodeValue($value);
+	}
+	
+	public function getFormElement() {
+		return $this->formElement;
 	}
 }
 

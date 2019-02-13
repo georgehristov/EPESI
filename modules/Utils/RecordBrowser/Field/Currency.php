@@ -45,7 +45,7 @@ class Utils_RecordBrowser_Field_Currency extends Utils_RecordBrowser_Field_Insta
     	return true;
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return false;
     }
     

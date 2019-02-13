@@ -36,7 +36,7 @@ class Utils_RecordBrowser_Field_MultiCommonData extends Utils_RecordBrowser_Fiel
 	    return $ret?: ' ' . $field_sql_id . ' ' . $direction; // key or if position or value failed
     }    
 
-    public function isOrderable() {
+    public function isOrderPossible() {
     	return false;
     }
     
@@ -44,7 +44,7 @@ class Utils_RecordBrowser_Field_MultiCommonData extends Utils_RecordBrowser_Fiel
     	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
     }
     

@@ -22,7 +22,7 @@ class Utils_RecordBrowser_Field_Timestamp extends Utils_RecordBrowser_Field_Inst
             $sql = "($field $operator %T $null_part)";
             $vals[] = $value;
         }
-        return array($sql, $vals);
+        return [$sql, $vals];
     }
 
     public function get_style($add_in_table_enabled = false) {
@@ -32,7 +32,7 @@ class Utils_RecordBrowser_Field_Timestamp extends Utils_RecordBrowser_Field_Inst
     	);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return false;
     }
     

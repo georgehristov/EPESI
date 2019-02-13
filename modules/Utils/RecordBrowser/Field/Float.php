@@ -21,7 +21,7 @@ class Utils_RecordBrowser_Field_Float extends Utils_RecordBrowser_Field_Instance
         return array($sql, $vals);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return false;
     }
     

@@ -6,6 +6,8 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
 	protected $multiselect = false;
 	
     public static function decodeParam($param) {
+    	if (is_array($param)) return $param;
+    	
     	$param = explode('__',$param);
     	if (isset($param[1])) {
     		$order = Utils_CommonDataCommon::validate_order($param[0]);
@@ -14,11 +16,11 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
     		$order = 'value';
     		$array_id = $param[0];
     	}
-    	return array(
+    	return [
     		'array_id'=>$array_id,
     		'order'=>$order,
     		'order_by_key'=>$order
-       	);
+       	];
     }
     public static function encodeParam($param) {
     	if (!is_array($param))
@@ -34,7 +36,7 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
     
     	$array_id = implode('::', $param);
     		 
-    	return implode('__', array($order, $array_id));
+    	return implode('__', [$order, $array_id]);
     }
     
     public function getSqlOrder($direction, $tab_alias='') {
@@ -106,7 +108,7 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
     	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
     }
     

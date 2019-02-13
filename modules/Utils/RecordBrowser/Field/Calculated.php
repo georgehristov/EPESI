@@ -8,7 +8,7 @@ class Utils_RecordBrowser_Field_Calculated extends Utils_RecordBrowser_Field_Ins
 		return false;
 	}	
 	
-	public function isOrderable() {
+	public function isOrderPossible() {
 		return $this->getParam() != ''? $this->name: false;
 	}
 	
@@ -16,7 +16,7 @@ class Utils_RecordBrowser_Field_Calculated extends Utils_RecordBrowser_Field_Ins
 		return preg_match('/^[a-z]+(\([0-9]+\))?$/i',$this->getParam())!==0;
 	}
 	
-	public function isSearchable($advanced = false) {
+	public function isSearchPossible($advanced = false) {
 		return preg_match('/^[a-z]+(\([0-9]+\))?$/i',$this->getParam())!==0;
 	}
 	

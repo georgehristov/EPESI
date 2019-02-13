@@ -42,7 +42,7 @@ class Utils_RecordBrowser_Field_Checkbox extends Utils_RecordBrowser_Field_Insta
     	);
     }
     
-    public function isSearchable($advanced = false) {
+    public function isSearchPossible($advanced = false) {
     	return false;
     }
     
