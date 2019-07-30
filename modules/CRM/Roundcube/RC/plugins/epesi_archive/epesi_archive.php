@@ -80,8 +80,6 @@ class epesi_archive extends rcube_plugin
 
   function render_mailboxlist($p)
   {
-    $rcmail = rcmail::get_instance();
-
     // set localized name for the configured archive folder
     if (isset($p['list'][$this->archive_mbox]))
         $p['list'][$this->archive_mbox]['name'] = $this->gettext('archivefolder');
@@ -94,7 +92,7 @@ class epesi_archive extends rcube_plugin
 
   function look_contact($addr) {
     global $E_SESSION;
-    return CRM_MailCommon::look_contact($addr,$E_SESSION['user']);
+    return CRM_Mail_AddressCommon::get_records_from_address($addr,$E_SESSION['user']);
   }
 
   function request_action()
@@ -110,142 +108,168 @@ class epesi_archive extends rcube_plugin
     //archive button
     $uids = get_input_value('_uid', RCUBE_INPUT_POST);
     $mbox = get_input_value('_mbox', RCUBE_INPUT_POST);
-    if($mbox==$this->archive_mbox || $mbox==$this->archive_sent_mbox || $mbox==$rcmail->config->get('drafts_mbox')) {
+    if(in_array($mbox, [$this->archive_mbox, $this->archive_sent_mbox, $rcmail->config->get('drafts_mbox')])) {
         $rcmail->output->show_message($this->gettext('invalidfolder'), 'error');
         return;
     }
     $sent_mbox = ($rcmail->config->get('sent_mbox')==$mbox);
 
-    $uids = explode(',',$uids);
+    $uids = explode(',', $uids);
     if($this->archive($uids)) {
-	global $account;
-	if(isset($account['f_use_epesi_archive_directories']) && $account['f_use_epesi_archive_directories']) {
-            if($sent_mbox)
-	        $rcmail->output->command('move_messages', $this->archive_sent_mbox);
-	    else
-        	$rcmail->output->command('move_messages', $this->archive_mbox);
-        }
+		global $account;
+		if(isset($account['f_use_epesi_archive_directories']) && $account['f_use_epesi_archive_directories']) {
+			$rcmail->output->command('move_messages', $sent_mbox? $this->archive_sent_mbox: $this->archive_mbox);
+       	}
         $rcmail->output->show_message($this->gettext('archived'), 'confirmation');
     }
     global $E_SESSION_ID,$E_SESSION;
-    $tmp = $_SESSION;
-    $_SESSION = $E_SESSION;
-    DBSession::write($E_SESSION_ID,'');
-    $_SESSION = $tmp;
+
+    EpesiSession::set($E_SESSION_ID, $E_SESSION);
   }
 
-  private function archive($uids,$verbose=true) {
+  private function archive($uids, $verbose=true) {
     global $E_SESSION;
     $rcmail = rcmail::get_instance();
     $path = getcwd();
-    chdir(str_replace(array('/modules/CRM/Roundcube/RC','\\modules\\CRM\\Roundcube\\RC'),'',$path));
+    chdir(str_replace(['/modules/CRM/Roundcube/RC','\\modules\\CRM\\Roundcube\\RC'], '', $path));
 
-    $msgs = array();
-    if (!is_array($uids)) $uids = $uids->get();
+    $uids = is_array($uids)? $uids: $uids->get();
+    
+    $_SESSION['force_archive'] = $_SESSION['force_archive']?? [];
+    
+    $epesi_mails = [];  
     foreach($uids as $uid) {
-        $msg = new rcube_message($uid);
-        if ($msg===null || empty($msg->headers)) {
+    	
+        $message = new rcube_message($uid);
+        if ($message===null || empty($message->headers)) {
             if($verbose) {
                 $rcmail->output->show_message('messageopenerror', 'error');
             }
             return false;
-        } else {
-            $msgs[$uid] = $msg;
         }
+        
+        $message_id = str_replace(['<','>'], '', $message->get_header('MESSAGE-ID'));
+        if(Utils_RecordBrowserCommon::get_records_count('crm_mails', compact('message_id'))) {
+        	$rcmail->output->show_message($this->gettext('archived_duplicate'), 'warning');
+        	return false;
+        }
+        
+        if (!$emails = $this->parse_emails($message, $verbose)) return false;
+
+        $headers = $this->parse_headers($message, $verbose);
+        
+        $content = $this->parse_content($message, $verbose);
+        
+        $employee = CRM_ContactsCommon::get_contact_by_user_id($E_SESSION['user']);
+        
+        $epesi_mails[] = CRM_MailCommon::archive_message(array_merge([
+        		'message_id' => $message_id,
+        		'related' => $message->get_header('REFERENCES'),
+        		'contacts' => $this->look_contact(array_merge($emails['from'], $emails['to'])),
+        		'date' => $message->headers->timestamp,
+        		'subject' => substr($message->subject, 0, 256),
+        		'body' => $content['body'],
+        		'headers' => implode("\n", $headers),
+        		'from' => rcube_mime::decode_mime_string((string) $message->get_header('FROM')),
+        		'to' => rcube_mime::decode_mime_string((string) $message->get_header('TO')),
+        		'employee' => $employee['id']?? ''
+        ], $content['files']));        
     }
 
-    $map = array();
-    foreach($msgs as $k=>$msg) {
-        $sends = rcube_mime::decode_address_list($msg->headers->to);
-        $map[$k] = array();
-        foreach($sends as $send) {
-            $addr = $send['mailto'];
-            $ret = $this->look_contact($addr);
-            $map[$k] = array_merge($map[$k],$ret);
-        }
-        $addr = rcube_mime::decode_address_list($msg->headers->from);
-        if($addr) $addr = array_shift($addr);
-        if(!isset($addr['mailto']) || !$addr['mailto']) {
-            $map[$k] = false;
-            continue;
-        }
-        $ret = $this->look_contact($addr['mailto']);
-        $map[$k] = array_merge($map[$k],$ret);
-    }
-
-    if(!isset($_SESSION['force_archive']))
-        $_SESSION['force_archive'] = array();
-    foreach($map as $k=>$ret) {
-        if(!$ret && !isset($_SESSION['force_archive'][$k]) && $verbose) {
-            $_SESSION['force_archive'][$k] = 1;
-            $rcmail->output->show_message($this->gettext('contactnotfound'), 'error');
-            return false;
-        }
-    }
-
-    $epesi_mails = array();
-    foreach($msgs as $k=>$msg) {
-        $contacts = $map[$k];
-        $mime_map = array();
-        foreach($msg->mime_parts as $mid=>$m)
-            $mime_map[$m->mime_id] = md5($k.microtime(true).$mid);
-        if($msg->has_html_part()) {
-//            $body = $msg->first_html_part();
-            foreach ($msg->mime_parts as $mime_id => $part) {
-                $mimetype = strtolower($part->ctype_primary . '/' . $part->ctype_secondary);
-                if ($mimetype == 'text/html') {
-                    $body = $rcmail->storage->get_message_part($msg->uid, $mime_id, $part);
-                    if(isset($part->replaces))
-                        $cid_map = $part->replaces;
-                    else
-                        $cid_map = array();
-                    break;
-                }
-            }
-            foreach($cid_map as $kk=>&$v) {
-                if(preg_match('/_part=(.*?)&/',$v,$matches)) {
-                    $mid = $matches[1];
-                    if(isset($mime_map[$mid]))
-                        $v = CRM_MailCommon::get_attachment_url($mime_map[$mid]);
-                } else {
-                    unset($cid_map[$kk]);
-                }
-            }
-            $body = rcmail_wash_html($body,array('safe'=>true,'inline_html'=>true),$cid_map);
-        } else {
-            $body = '<pre>'.$msg->first_text_part().'</pre>';
-        }
-        $headers = array();
-        foreach($msg->headers as $kk=>$v) {
-            if(is_string($v) && $kk!='from' && $kk!='to' && $kk!='body_structure')
-                $headers[] = $kk.': '.rcube_mime::decode_mime_string((string)$v);
-        }
-        $message_id = str_replace(array('<','>'),'',$msg->get_header('MESSAGE-ID'));
-        if(Utils_RecordBrowserCommon::get_records_count('rc_mails',array('message_id'=>$message_id))>0) {
-            $rcmail->output->show_message($this->gettext('archived_duplicate'), 'warning');
-            return false;
-        }
-        $employee = DB::GetOne('SELECT id FROM contact_data_1 WHERE active=1 AND f_login=%d',array($E_SESSION['user']));
-        $attachments = array();
-        foreach($msg->mime_parts as $mid=>$m) {
-            if(!$m->disposition) continue;
-            if(isset($cid_map['cid:'.$m->content_id]))
-                $attachment = 0;
-            else
-                $attachment = 1;
-            $attachments[] = array('type'=>$m->mimetype,'filename'=>$m->filename,'mime_id'=>$mime_map[$m->mime_id],'attachment'=>$attachment,'content'=>$msg->get_part_body($m->mime_id));
-        }
-
-        $id = CRM_MailCommon::archive_message($message_id,$msg->get_header('REFERENCES'),$contacts,$msg->headers->timestamp,$msg->subject,$body,implode("\n",$headers),rcube_mime::decode_mime_string((string)$msg->headers->from),rcube_mime::decode_mime_string((string)$msg->headers->to),$employee,$attachments);
-        $epesi_mails[] = $id;
-    }
-
-    $E_SESSION['rc_mails_cp'] = $epesi_mails;
+    $E_SESSION['crm_mails_cp'] = $epesi_mails;
 
     chdir($path);
     return true;
   }
 
+  private function parse_headers(rcube_message $message, $verbose = true) {
+  	$headers = [];
+  	foreach($message->headers as $kk => $v) {
+  		if(is_string($v) && !in_array($kk, ['from', 'to', 'body_structure']))
+  			$headers[] = $kk.': '.rcube_mime::decode_mime_string((string) $v);
+  	}
+  	return $headers;
+  }
+  
+  private function parse_emails(rcube_message $message, $verbose = true) {
+  	$rcmail = rcmail::get_instance();
+  	
+  	$uid = $message->uid;
+  	
+  	$ret = [];
+  	foreach (['from', 'to'] as $key) {
+  		$ret[$key] = array_filter(array_column(rcube_mime::decode_address_list($message->get_header($key)), 'mailto'));
+  	}
+  	
+  	if(!$ret['from'] && !isset($_SESSION['force_archive'][$uid])) {
+  		$_SESSION['force_archive'][$uid] = 1;
+  		if ($verbose) {
+  			$rcmail->output->show_message($this->gettext('contactnotfound'), 'error');
+  		}
+  		return false;
+  	}
+  	
+  	return $ret;
+  }
+  
+  private function parse_content(rcube_message $message, $verbose = true) {
+  	$rcmail = rcmail::get_instance();
+  	
+  	$uid = $message->uid;
+  	
+  	$files = [
+  			'attachments' => [],
+  			'media' => []
+  	];
+  	  	
+  	if ($message->has_html_part()) {
+  		$cid_map = [];
+  		foreach ($message->mime_parts as $mime_id => $mime) {
+  			$mimetype = strtolower($mime->ctype_primary . '/' . $mime->ctype_secondary);
+  			
+  			if ($mimetype != 'text/html') continue;
+  			
+  			$body = $rcmail->storage->get_message_part($uid, $mime_id, $mime);
+  			
+  			$cid_map = $mime->replaces?? [];
+  			
+  			break;
+  		}
+  	} else {
+  		$body = '<pre>' . $message->first_text_part() . '</pre>';
+  	}  	
+  	  	
+  	foreach ($message->mime_parts as $mime) {
+  		if (!$mime->disposition) continue;
+  		
+  		$filename = $mime->filename?: $mime->content_id;
+  		
+  		$key = isset($cid_map['cid:' . $mime->content_id])? 'media': 'attachments';
+  		
+  		$files[$key][$mime->mime_id] = Utils_FileStorageCommon::write_content($filename, $message->get_part_body($mime->mime_id));
+  	}
+  	
+  	if ($cid_map) {
+  		foreach($cid_map as $k => &$v) {
+  			$matches = null;
+  			if(preg_match('/_part=(.*?)&/', $v, $matches)) {
+  				$mid = $matches[1];
+  				if(isset($files['media'][$mid])) {
+  					$url = Utils_FileStorageCommon::get_default_action_urls($files['media'][$mid]);
+  					
+  					$v = $url['inline']?? '';
+  				}
+  			} else {
+  				unset($cid_map[$k]);
+  			}
+  		}
+  		
+  		$body = rcmail_wash_html($body, ['safe' => true, 'inline_html' => true], $cid_map);
+  	}
+  	
+  	return compact('body', 'files');
+  }
+  
   function add_mailbox($p) {
     if($p['root']=='' && $p['name']=='*') {
         $rcmail = rcmail::get_instance();
