@@ -30,15 +30,15 @@ class Utils_RecordBrowser_Filters extends Module {
 		return array(self::$empty_value=>'---');
 	}
 	
-	public function construct($rb_obj, $filter_field_crits = array(), $custom_filters = array()) {
+	public function construct(Utils_RecordBrowser $rb_obj, $filter_field_crits = array(), $custom_filters = array()) {
 		if (!($rb_obj instanceof Utils_RecordBrowser))
 			trigger_error('Cannot construct filters, $rb_obj must be instance of Utils_RecordBrowser:' . $this->get_path() . '.', E_USER_ERROR);
 				
 		$this->rb_obj = $rb_obj;
-		$this->tab = $rb_obj->tab;
+		$this->tab = $rb_obj->getTab();
 		$this->filter_field_crits = $filter_field_crits;
 		$this->custom_filters = $custom_filters;
-		$this->table_rows = Utils_RecordBrowserCommon::init($this->tab);
+		$this->table_rows = $rb_obj->getRecordset()->getFields();
 	}
 
 	public function get_filters_html($clear_filters = false, $filters_set = array(), $filter_group_id='') {

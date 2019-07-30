@@ -619,24 +619,24 @@ class Utils_RecordBrowser_FieldCommon extends ModuleCommon {
 	}
 }
 
-Utils_RecordBrowser_FieldCommon::register([
-		'text' => Utils_RecordBrowser_Field_Text::class,
-		'long text' => Utils_RecordBrowser_Field_LongText::class,
-		'select' => Utils_RecordBrowser_Field_Select::class,
-		'multiselect' => Utils_RecordBrowser_Field_MultiSelect::class,
-		'commondata' => Utils_RecordBrowser_Field_CommonData::class,
-		'multicommondata' => Utils_RecordBrowser_Field_MultiCommonData::class,
-		'float' => Utils_RecordBrowser_Field_Float::class,
-		'integer' => Utils_RecordBrowser_Field_Integer::class,
-		'date' => Utils_RecordBrowser_Field_Date::class,
-		'time' => Utils_RecordBrowser_Field_Time::class,
-		'timestamp' => Utils_RecordBrowser_Field_Timestamp::class,
-		'currency' => Utils_RecordBrowser_Field_Currency::class,
-		'checkbox' => Utils_RecordBrowser_Field_Checkbox::class,
-		'calculated' => Utils_RecordBrowser_Field_Calculated::class,
-		'autonumber' => Utils_RecordBrowser_Field_Autonumber::class,
-		'currency' => Utils_RecordBrowser_Field_Currency::class,
-		'hidden' => Utils_RecordBrowser_Field_Hidden::class,
-]);
+// Utils_RecordBrowser_FieldCommon::register([
+// 		'text' => Utils_RecordBrowser_Field_Text::class,
+// 		'long text' => Utils_RecordBrowser_Field_LongText::class,
+// 		'select' => Utils_RecordBrowser_Field_Select::class,
+// 		'multiselect' => Utils_RecordBrowser_Field_MultiSelect::class,
+// 		'commondata' => Utils_RecordBrowser_Field_CommonData::class,
+// 		'multicommondata' => Utils_RecordBrowser_Field_MultiCommonData::class,
+// 		'float' => Utils_RecordBrowser_Field_Float::class,
+// 		'integer' => Utils_RecordBrowser_Field_Integer::class,
+// 		'date' => Utils_RecordBrowser_Field_Date::class,
+// 		'time' => Utils_RecordBrowser_Field_Time::class,
+// 		'timestamp' => Utils_RecordBrowser_Field_Timestamp::class,
+// 		'currency' => Utils_RecordBrowser_Field_Currency::class,
+// 		'checkbox' => Utils_RecordBrowser_Field_Checkbox::class,
+// 		'calculated' => Utils_RecordBrowser_Field_Calculated::class,
+// 		'autonumber' => Utils_RecordBrowser_Field_Autonumber::class,
+// 		'currency' => Utils_RecordBrowser_Field_Currency::class,
+// 		'hidden' => Utils_RecordBrowser_Field_Hidden::class,
+// ]);
 
 ?>

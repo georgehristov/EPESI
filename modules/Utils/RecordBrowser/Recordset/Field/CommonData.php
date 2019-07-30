@@ -2,8 +2,21 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Instance {
+class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser_Recordset_Field {
 	protected $multiselect = false;
+	
+	public static function typeLabel() {
+		return __('Commondata');
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return array_merge(parent::gridColumnOptions($recordBrowser), [
+				'wrapmode' => 'nowrap',
+				'width' => 50,
+				'quickjump' => (!is_array($this->param) || strpos($this->param['array_id'],':')===false),
+				'search' => (!is_array($this->param) || strpos($this->param['array_id'],':')===false),
+		]);
+	}
 	
     public static function decodeParam($param) {
     	if (is_array($param)) return $param;
@@ -97,21 +110,6 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
     	return array($field . " $operator $value", array());
     }
 
-    public function getStyle($add_in_table_enabled = false) {
-    	return array(
-    			'wrap'=>false,
-    			'width'=>50
-    	);
-    }   
-
-    public function getQuickjump($advanced = false) {
-    	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
-    }
-    
-    public function isSearchPossible($advanced = false) {
-    	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
-    }
-    
     public function getAjaxTooltipOpts() {
     	return [
     			'param' => $this->getParam()
@@ -126,4 +124,37 @@ class Utils_RecordBrowser_Field_CommonData extends Utils_RecordBrowser_Field_Ins
     	
     	return $ret;
     }
+    
+    public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
+    	$ret = '';
+    	
+    	if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
+    		$arr = explode('::', $desc['param']['array_id']);
+    		$path = array_shift($arr);
+    		foreach($arr as $v) $path .= '/' . $record[Utils_RecordBrowserCommon::get_field_id($v)];
+    		$path .= '/' . $record[$desc['id']];
+    		$ret = Utils_CommonDataCommon::get_value($path, true);
+    	}
+    	
+    	return $ret;
+    }
+    
+    public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
+    	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
+    		return;
+
+    	$param = $desc->getParam();
+    		
+    	$param = explode('::', $desc['param']['array_id']);
+    	foreach ($param as $k => $v) {
+    		if (!$k) continue;
+    		
+    		$param[$k] = self::getFieldId($v);
+    	}
+    	
+    	$form->addElement($desc['type'], $field, $label, $param, ['empty_option' => true, 'order' => $desc['param']['order']], ['id' => $field]);
+    	
+    	if ($mode !== 'add')
+    		$form->setDefaults([$field => $default]);
+    }   
 }

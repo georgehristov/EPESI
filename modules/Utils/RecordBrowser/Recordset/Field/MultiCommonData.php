@@ -2,9 +2,20 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_Field_MultiCommonData extends Utils_RecordBrowser_Field_CommonData {
+class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBrowser_Recordset_Field_CommonData {
 	protected $multiselect = true;
 
+	public static function typeLabel() {
+		return __('Multi Commondata');
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return array_merge(parent::gridColumnOptions($recordBrowser), [
+				'order' => false,
+				'width' => 100,
+		]);
+	}
+	
     public static function decodeParam($param) {
     	if (is_array($param)) return $param;
 
@@ -36,18 +47,6 @@ class Utils_RecordBrowser_Field_MultiCommonData extends Utils_RecordBrowser_Fiel
 	    return $ret?: ' ' . $field_sql_id . ' ' . $direction; // key or if position or value failed
     }    
 
-    public function isOrderPossible() {
-    	return false;
-    }
-    
-    public function getQuickjump($advanced = false) {
-    	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
-    }
-    
-    public function isSearchPossible($advanced = false) {
-    	return (!is_array($this->param) || strpos($this->param['array_id'],':')===false);
-    }
-    
     public function defaultValue() {
     	return [];
     }
@@ -59,4 +58,27 @@ class Utils_RecordBrowser_Field_MultiCommonData extends Utils_RecordBrowser_Fiel
     public static function encodeValue($value) {
     	return Utils_RecordBrowserCommon::encode_multi($value);
     }
+    
+    public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
+    	return Utils_RecordBrowser_Recordset_Field_Select::defaultDisplayCallback($record, $nolink, $desc, $tab);
+    }
+    
+    public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
+    	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
+    		return;
+
+    	$param = $desc->getParam();
+    		
+    	if (empty($param['array_id']))
+    		trigger_error("Commondata array id not set for field: $field", E_USER_ERROR);
+    			
+    	$select_options = Utils_CommonDataCommon::get_translated_tree($param['array_id'], $param['order']);
+    	if (!is_array($select_options))
+    		$select_options = [];
+    				
+    	$form->addElement('multiselect', $field, $label, $select_options, ['id' => $field]);
+    			
+    	if ($mode !== 'add')
+    		$form->setDefaults([$field => $default]);
+    }   
 }

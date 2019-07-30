@@ -2,7 +2,7 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-interface Utils_RecordBrowser_Field_Interface {
+interface Utils_RecordBrowser_Recordset_Field_Interface {
 	public function getId();
 	
 	public function getName();
@@ -10,16 +10,6 @@ interface Utils_RecordBrowser_Field_Interface {
 	public function getActive();
 	
 	public function getActualDbType();
-	
-// 	public function getStyle($addInTableEnabled = false);
-	
-	public function getSearchType($advanced = false);
-	
-	public function getQuickjump($advanced = false);
-		
-	public function isOrderPossible();
-	
-	public function isSearchPossible($advanced = false);
 	
 	public function isRequiredPossible();
 	
@@ -43,9 +33,9 @@ interface Utils_RecordBrowser_Field_Interface {
 	
 	public function processAddedValue($value, $record);
 	
-	public function defaultDisplay($record, $nolink=false);
+	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj);
 	
-	public function defaultQFfieldCallback();
+	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null);
 	
 	public function getSqlId($tabAlias='');
 	
@@ -72,12 +62,22 @@ interface Utils_RecordBrowser_Field_Interface {
 	public function handleCritsRawSql($operator, $value, $tabAlias='');
 }
 
-class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_RecordBrowser_Field_Interface {
+class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
+	/**
+	 * @var Utils_RecordBrowser_Recordset
+	 */
+	protected $recordset;
 	protected $formElement = null;
+	protected static $registry = [];
+	
+	public static function typeLabel() {
+		return static::class;
+	}
 	
 	public function __construct($desc = null) {
 		$descDefault = [
 				'name' => null,
+				'field' => null,
 				'id' => null,
 				'caption' => null,
 				'pkey' => null,
@@ -118,25 +118,26 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	}
 	
 	/**
-	 * @param string $tab
+	 * @param string Utils_RecordBrowser_Recordset
 	 * @param string|array $name_or_desc
 	 * @param boolean $admin
-	 * @return Utils_RecordBrowser_Field_Interface
+	 * @return Utils_RecordBrowser_Recordset_Field_Interface
 	 */
-	public static function create($tab, $name_or_desc, $admin = false) {
-		$desc = is_string($name_or_desc)? self::getDesc($tab, $name_or_desc): $name_or_desc;
+	public static function create(Utils_RecordBrowser_Recordset $recordset, $name_or_desc, $admin = false) {
+		$desc = is_string($name_or_desc)? self::getDesc($recordset->getTab(), $name_or_desc): $name_or_desc;
 		
 		if (!$desc) return [];
 		
 		$desc = self::resolveDesc($desc);
 
-		$callbacks = Utils_RecordBrowser_FieldCommon::get_callbacks($tab, $desc['name']);		
-		
-		$desc = array_merge($desc, ['tab' => $tab], $callbacks);
-
 		if (!$class = self::resolveClass($desc)) return [];
+
+		/**
+		 * @var Utils_RecordBrowser_Recordset_Field $field
+		 */
+		$field = new $class($desc);
 		
-		return new $class($desc);
+		return $field->setRecordset($recordset);
 	}
 	
 	public static function getDesc($tab, $fieldName, $admin = false) {
@@ -159,11 +160,23 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	}
 	
 	public static function resolveClass($desc) {
-		$register = Utils_RecordBrowser_FieldCommon::get_registered_fields();
-
-		return $register[$desc['type']]?? null;
+		return self::$registry[$desc['type']]?? null;
 	}
-	
+		
+	public static function getRegistrySelectList() {
+		$ret = [];
+		
+		foreach (self::$registry as $type => $class) {
+			$ret[$type] = $class::typeLabel();
+		}
+		
+		return $ret;
+	}
+		
+	public static function paramElements() {
+		return [];
+	}
+		
 	/**
 	 * @param array $desc
 	 * @return array
@@ -189,19 +202,35 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		}
 		$ret['commondata'] = $commondata;
 		if ($commondata) {
+			$param = Utils_RecordBrowser_Recordset_Field_CommonData::decodeParam($desc['param']);
 			if (!isset($ret['commondata_order'])) {
-				if (isset($ret['param']['order'])) {
-					$ret['commondata_order'] = $ret['param']['order'];
+				if (isset($param['order'])) {
+					$ret['commondata_order'] = $param['order'];
 				} else {
 					$ret['commondata_order'] = 'value';
 				}
 			}
 			if (!isset($ret['commondata_array'])) {
-				$ret['commondata_array'] = $ret['param']['array_id'];
+				$ret['commondata_array'] = $param['array_id'];
 			}
 		}
 			
 		return array_merge($desc, $ret);
+	}
+		
+	public static final function register($type_or_list, $class = null) {
+		if (!is_array($type_or_list)) {
+			if (!$class) trigger_error("Attempting to register field $type_or_list without associated class", E_USER_ERROR);
+			
+			$type_or_list = [$type_or_list => $class];
+		}
+		
+		array_map(function($class) {
+			if (!is_a($class, Utils_RecordBrowser_Recordset_Field::class, true))
+				trigger_error("Attempting to register field $class that is not descendent of Utils_RecordBrowser_Recordset_Field", E_USER_ERROR);
+		}, $type_or_list);
+		
+		self::$registry = array_merge(self::$registry, $type_or_list);
 	}
 		
 	public final function isVisible() {
@@ -220,31 +249,28 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return Utils_RecordBrowserCommon::get_field_id($field_name);
 	}
 	
-	public function isOrderPossible() {
-		return true;
+	public final function getGridColumnOptions(Utils_RecordBrowser $recordBrowser, $disabled = []) {
+		$column = array_filter(array_diff_key($this->gridColumnOptions($recordBrowser), array_filter($disabled)));
+		
+		$options = array_fill_keys(['quickjump', 'order', 'search'], $this->getId());
+		
+		return array_replace($column, array_intersect_key($options, $column));
 	}
 	
-// 	public function get_style($add_in_table_enabled = false) {
-// 		return array(
-// 				'wrap'=>false,
-// 				'width'=>100
-// 		);
-// 	}
-	
-	public function getQuickjump($advanced = false) {
-		return false;
-	}
-	
-	public function isSearchPossible($advanced = false) {
-		return $this->getSearchType($advanced)? true: false;
-	}
-	
-	public function getSearchType($advanced = false) {
-		return 'text';
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return [
+				'name' => _V($this->getLabel()),
+				'order' => true,
+				'quickjump' => false,
+				'search' => true,
+				'search_type' => 'text',
+				'wrapmode' => false,
+				'width' => 100
+		];
 	}
 	
 	public function getActualDbType() {
-		return Utils_RecordBrowser_FieldCommon::actual_db_type($this->getType(), $this->getParam());
+		return Utils_RecordBrowserCommon::actual_db_type($this->getType(), $this->getParam());
 	}
 	
 	public function getSqlType() {
@@ -261,6 +287,10 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	
 	public function getLabel() {
 		return _V($this->getCaption()?: $this->getName());
+	}
+	
+	public function getQFfieldLabel() {
+		return $this->getTooltip('<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>');
 	}
 	
 	public static function decodeValue($value, $htmlspecialchars = true) {
@@ -302,14 +332,14 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return array($this->getSqlId($tab_alias) . " $operator $value", array());
 	}
 	
-	public final function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj, $display_callback_table = null) {
+	public final function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj) {
 		if ($mode == 'view' && Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(),'hide_empty') && $this->isEmpty($record)) {
 			eval_js('var e=jq("#_'.$this->getId().'__data");if(e.length)e.closest("tr").hide();');
 		}
 				
 		$default = ($mode=='add')? ($custom_defaults[$this->getId()]?? ''): ($record[$this->getId()]?? '');
 
-		$this->callQFfieldCallback($form, $mode, $default, $rb_obj, $display_callback_table);
+		$this->callQFfieldCallback($form, $mode, $default, $rb_obj);
 				
 		$this->formElement = $form->getElement($this->getId());
 		
@@ -330,49 +360,53 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return $record[$this->getId()]=='';
 	}
 	
-	public function callQFfieldCallback($form, $mode, $default, $rb_obj, $display_callback_table = null) {
-		$callback = is_callable($this->QFfield_callback)? $this->QFfield_callback: $this->defaultQFfieldCallback();
+	public function callQFfieldCallback($form, $mode, $default, $rb_obj) {
+		$callback = is_callable($this->QFfield_callback)? $this->QFfield_callback: [$this, 'defaultQFfieldCallback'];
 		
 		if (!is_callable($callback)) return;
 
-		$label = '<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>';
-		
-		$callback($form, $this->getId(), $label, $mode, $default, $this, $rb_obj, $display_callback_table);
+		$callback($form, $this->getId(), $this->getQFfieldLabel(), $mode, $default, $this, $rb_obj, []);
 	}
 	
-	public function defaultQFfieldCallback() {
-		return [Utils_RecordBrowser_FieldCommon::class, 'QFfield_' . $this->getType()];
-	}	
-	
-	public function createQFfieldStatic($form, $mode, $default, $rb_obj) {
+	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {}
+		
+	public static function createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj) {
 		if ($mode !== 'add' && $mode !== 'edit') {
-			$value = Utils_RecordBrowserCommon::get_val($this->getTab(), $this->getId(), $rb_obj->record, false, $this);
-			$form->addElement('static', $this->getId(), $this->getLabel(), $value, ['id' => $this->getId()]);
+			$field = $desc->getId();
+			
+			$value = Utils_RecordBrowserCommon::get_val($desc->getTab(), $field, $rb_obj->record, false, $desc);
+			$form->addElement('static', $field, $desc->getQFfieldLabel(), $value, ['id' => $field]);
 			return true;
 		}
 		return false;
 	}
 	
 	public final function display($record, $nolink=false) {
-		if (is_callable($this->display_callback))
-			$ret = call_user_func_array($this->display_callback, [$record, $nolink, $this, $this->getTab()]);
-		else
-			$ret = $this->defaultDisplay($record, $nolink);
-			
-		return $ret;
-	}
-	
-	public function defaultDisplay($record, $nolink=false) {
-		if (is_callable($defaultDisplayCallback = $this->defaultDisplayCallback()))
-			$ret = call_user_func_array($defaultDisplayCallback, [$record, $nolink, $this, $this->getTab()]);
-		else
-			$ret = $record[$this->getId()];
+		static $recurrence = [];
+		
+		if(!array_key_exists('id', $record)) $record['id'] = null;
+		if (!array_key_exists($this['id'], $record)) trigger_error($this['id'].' - unknown field for record '.serialize($record), E_USER_ERROR);
+		
+		$val = $record[$this['id']];
+		
+		$function_call_id = implode('|', [$this->getTab(), $this['id'], serialize($val)]);
+		if (isset($recurrence[$function_call_id])) {
+			return '!! ' . __('recurrence issue') . ' !!';
+		} else {
+			$recurrence[$function_call_id] = true;
+		}
+		
+		$callback = is_callable($this->display_callback)? $this->display_callback: [$this, 'defaultDisplayCallback'];
+		
+		$ret = $callback($record, $nolink, $this, $this->getTab());
+		
+		unset($recurrence[$function_call_id]);
 
 		return $ret;
 	}
 	
-	public function defaultDisplayCallback($record, $nolink=false) {
-		return [Utils_RecordBrowser_FieldCommon::class, 'display_' . $this->getType()];
+	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
+		return is_array($record[$desc['id']])? implode('<br />', $record[$desc['id']]): $record[$desc['id']];
 	}
 	
 	public final function getTooltip($label = null) {
@@ -470,7 +504,7 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	}
 	
 	public function getTab() {
-		return $this->tab;
+		return $this->getRecordset()->getTab();
 	}
 	
 	public function setName($name) {
@@ -587,12 +621,6 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 		return $this;
 	}
 	
-	public function setTab($tab) {
-		$this->tab = $tab;
-		
-		return $this;
-	}
-	
 	public function getCaption() {
 		return $this->caption;
 	}
@@ -623,6 +651,17 @@ class Utils_RecordBrowser_Field_Instance extends ArrayObject implements Utils_Re
 	public function getFormElement() {
 		return $this->formElement;
 	}
+	
+	public function getRecordset() {
+		return $this->recordset;
+	}
+
+	public function setRecordset($recordset) {
+		$this->recordset = $recordset;
+		
+		return $this;
+	}
+
 }
 
 

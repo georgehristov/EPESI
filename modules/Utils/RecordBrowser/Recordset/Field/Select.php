@@ -2,23 +2,71 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instance {
+class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Recordset_Field {
 	public static $options_limit = 50;
 	protected $multiselect = false;
 	protected $single_tab = false;
 	protected $record_count = 0;
 	
+	public static function typeLabel() {
+		return __('Select');
+	}
+	
+	public static function paramElements() {
+		Libs_QuickFormCommon::autohide_fields('source_type', [
+				'values' => '__RECORDSETS__',
+				'hide' => 'source'
+		]);
+		
+		return [
+				'source_type' => [
+						'type' => 'select',
+						'label' => _M('Source Type'),
+						'values' => [
+								null => __('Static Recordsets'),
+ 								'__RECORDSETS__' => __('Dynamic Recordsets')
+						],
+						'help' => __('Sources are defined dynamically in the crits callback or selected static here')
+				],
+				'source' => [
+						'type' => 'select',
+						'label' => _M('Source of Data'),
+						'values' => Utils_RecordBrowserCommon::list_installed_recordsets(),
+						'help' => __('Sources are defined in the crits callback')
+				],
+				'crits_callback' => [
+						'type' => 'text',
+						'label' => _M('Crits Callback'),
+						'help' => __('Crits callback method to limit the selection')
+				],
+				'advanced_callback' => [
+						'type' => 'text',
+						'label' => _M('Advanced Callback'),
+						'help' => __('Advanced callback method to define selection formatting, etc')
+				],
+		];
+	}
+	
 	function __construct($array) {
 		parent::__construct($array);
 		
 		$this->single_tab = $this->param['single_tab'];
-	}	
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return array_merge(parent::gridColumnOptions($recordBrowser), [
+				'order' => $this->single_tab? true: false,
+				'quickjump' => true,
+		]);
+	}
 	
 	public function prepareSqlValue(& $value) {
 		$value = $this->encodeValue($value);
 		
-		//backward compatibility
+		//---> backward compatibility
 		$value = str_replace(array('P:', 'C:'), array('contact/', 'company/'), $value);
+		//<--- backward compatibility
+		
 		return true;
 	}
 	
@@ -160,11 +208,11 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		
 		$param = explode(';', $param);
 		$reference = explode('::', $param[0]);
-		$crits_callback = isset($param[1])? explode('::', $param[1]): null;
+		$crits_callback = isset($param[1])? array_filter(explode('::', $param[1])): null;
 		$adv_params_callback = isset($param[2])? explode('::', $param[2]): null;
 		
 		$select_tab = $reference[0];
-		$cols = isset($reference[1])? array_map(array(__CLASS__, 'get_field_id'), array_filter(explode('|', $reference[1]))): null;
+		$cols = isset($reference[1])? array_map([__CLASS__, 'getFieldId'], array_filter(explode('|', $reference[1]))): null;
 		
 		if ($select_tab == '__RECORDSETS__') {
 			$select_tabs = DB::GetCol('SELECT tab FROM recordbrowser_table_properties');
@@ -326,14 +374,6 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 		//TODO: add this
 	}
 	
-	public function isOrderPossible() {
-		return $this->single_tab? true: false;
-	}
-	
-	public function getQuickjump($advanced = false) {
-		return true;
-	}
-	
 	public function getAjaxTooltipOpts() {
 		return [
 				'tabCrits' => $this->getSelectTabCrits()
@@ -352,4 +392,125 @@ class Utils_RecordBrowser_Field_Select extends Utils_RecordBrowser_Field_Instanc
 
 		return __('Select one') . ($ret? ' ' . __('of') . ' ' . $ret: '');
 	}
+	
+	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
+		$ret = '---';
+		if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
+			$val = $record[$desc['id']];
+			$commondata_sep = '/';
+			if ((is_array($val) && empty($val))) return $ret;
+			
+			$param = Utils_RecordBrowserCommon::decode_select_param($desc['param']);
+			
+			if(!$param['array_id'] && $param['single_tab'] == '__COMMON__') return;
+			
+			if (!is_array($val)) $val = array($val);
+			
+			$ret = '';
+			foreach ($val as $v) {
+				$ret .= ($ret!=='')? '<br>': '';
+				
+				if ($param['single_tab'] == '__COMMON__') {
+					$array_id = $param['array_id'];
+					$path = explode('/', $v);
+					$tooltip = '';
+					$res = '';
+					if (count($path) > 1) {
+						$res .= Utils_CommonDataCommon::get_value($array_id . '/' . $path[0], true);
+						if (count($path) > 2) {
+							$res .= $commondata_sep . '...';
+							$tooltip = '';
+							$full_path = $array_id;
+							foreach ($path as $w) {
+								$full_path .= '/' . $w;
+								$tooltip .= ($tooltip? $commondata_sep: '').Utils_CommonDataCommon::get_value($full_path, true);
+							}
+						}
+						$res .= $commondata_sep;
+					}
+					$label = Utils_CommonDataCommon::get_value($array_id . '/' . $v, true);
+					if (!$label) continue;
+					$res .= $label;
+					$res = Utils_RecordBrowserCommon::no_wrap($res);
+					if ($tooltip) $res = '<span '.Utils_TooltipCommon::open_tag_attrs($tooltip, false) . '>' . $res . '</span>';
+				} else {
+					$tab_id = Utils_RecordBrowserCommon::decode_record_token($v, $param['single_tab']);
+					
+					if (!$tab_id) continue;
+					
+					list($select_tab, $id) = $tab_id;
+					
+					if ($param['cols']) {
+						$res = Utils_RecordBrowserCommon::create_linked_label($select_tab, $param['cols'], $id, $nolink);
+					} else {
+						$res = Utils_RecordBrowserCommon::create_default_linked_label($select_tab, $id, $nolink);
+					}
+				}
+				
+				$ret .= $res;
+			}
+		}
+		
+		return $ret;
+	}
+
+	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
+		if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
+			return;
+		
+		// --->backward compatibility
+		switch ($desc->getType()) {
+			case 'multiselect' :
+				Utils_RecordBrowser_Recordset_Field_MultiSelect::defaultQFfieldCallback($form, $desc, $mode, $default, $rb_obj);
+				return;
+			case 'multicommondata' :
+				Utils_RecordBrowser_Recordset_Field_MultiCommonData::defaultQFfieldCallback($form, $desc, $mode, $default, $rb_obj);
+				return;
+
+			default :
+				break;
+		}
+		// <---backward compatibility
+
+		if (! $desc instanceof Utils_RecordBrowser_Recordset_Field_Select) return;
+
+		$field = $desc->getId();
+		$label = $desc->getQFfieldLabel();
+
+		$record = $rb_obj->record;
+		$param = $desc->getParam();
+		$multi_adv_params = $desc->callAdvParamsCallback($record);
+		$format_callback = $multi_adv_params['format_callback'];
+
+		$tab_crits = $desc->getSelectTabCrits($record);
+		$select_options = $desc->getSelectOptions($record);
+
+		if ($param['single_tab']) $label = $desc->getTooltip($label, $param['single_tab'], $tab_crits[$param['single_tab']]);
+
+		if ($desc->record_count > Utils_RecordBrowser_Recordset_Field_Select::$options_limit) {
+			$form->addElement('autoselect', $field, $label, $select_options, array(
+					array(
+							'Utils_RecordBrowserCommon',
+							'automulti_suggestbox'
+					),
+					array(
+							$rb_obj->tab,
+							$tab_crits,
+							$format_callback,
+							$desc['param']
+					)
+			), $format_callback);
+		}
+		else {
+			$select_options = array(
+					'' => '---'
+			) + $select_options;
+			$form->addElement('select', $field, $label, $select_options, array(
+					'id' => $field
+			));
+		}
+		if ($mode !== 'add') $form->setDefaults(array(
+				$field => $default
+		));
+	}   
 }

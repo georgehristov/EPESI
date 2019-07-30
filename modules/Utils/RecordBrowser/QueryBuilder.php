@@ -640,8 +640,10 @@ class Utils_RecordBrowser_QueryBuilder
             return array("$field IS NULL OR $field=''", array());
         }
 
+        
         if (!isset($field_def['ref_table'])) { // commondata type doesn't have this, only select/multiselect
-            $field_def['ref_table'] = $field_def['param']['array_id'];
+        	$param = Utils_RecordBrowser_Recordset_Field_CommonData::decodeParam($field_def['param']);
+        	$field_def['ref_table'] = $param['array_id'];
         }
 
         $sql = array();
@@ -772,6 +774,7 @@ class Utils_RecordBrowser_QueryBuilder
                 break;
 
             case 'commondata':
+            case 'multicommondata':
                 $ret = $this->hf_multiple($crit, array($this, 'hf_commondata'), $field_def);
                 break;
 

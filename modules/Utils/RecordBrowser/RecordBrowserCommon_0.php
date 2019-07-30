@@ -16,9 +16,15 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     private static $del_or_a = '';
     public static $admin_filter = '';
     /**
-     * @var array[Utils_RecordBrowser_Field_Interface]
+     * @var array[Utils_RecordBrowser_Recordset_Field_Interface]
+     * @deprecated
      */
     public static $table_rows = array();
+    
+    /**
+     * @var array
+     * @deprecated
+     */
     public static $hash = array();
     public static $admin_access = false;
     public static $cols_order = array();
@@ -94,67 +100,24 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     	}
     }
 
-	public static function get_val($tab, $field, $record, $nolink = false, $desc = null) {
-        static $recurrence_call_stack = array();
-        self::init($tab);
-        if (!isset(self::$table_rows[$field])) {
-            if (!isset(self::$hash[$field])) trigger_error('Unknown field "'.$field.'" for recordset "'.$tab.'"',E_USER_ERROR);
-            $field = self::$hash[$field];
-        }
-        if ($desc===null) $desc = self::$table_rows[$field];
-        if(!array_key_exists('id',$record)) $record['id'] = null;
-        if (!array_key_exists($desc['id'],$record)) trigger_error($desc['id'].' - unknown field for record '.serialize($record), E_USER_ERROR);
-        $val = $record[$desc['id']];
-        $function_call_id = implode('|', array($tab, $field, serialize($val)));
-        if (isset($recurrence_call_stack[$function_call_id])) {
-            return '!! ' . __('recurrence issue') . ' !!';
-        } else {
-            $recurrence_call_stack[$function_call_id] = true;
-        }
+	public static function get_val($tab, $field, $record, $nolink = false) {
+        return Utils_RecordBrowser_Recordset::create($tab)->getField($field)->display($record, $nolink);
+    }
 
-        unset($recurrence_call_stack[$function_call_id]);
-        return $desc->display($record, $nolink);
-    }
-    
-    ////////////////////////////
-    // default display callbacks - backward compatibility
-    
-    public static function display_select($record, $nolink=false, $desc=null, $tab=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_select($record, $nolink, $desc, $tab);
-    }
-    public static function display_multiselect($record, $nolink=false, $desc=null, $tab=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_select($record, $nolink, $desc, $tab);
-    }
-    public static function display_multicommondata($record, $nolink=false, $desc=null, $tab=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_select($record, $nolink, $desc, $tab);
-    }
-    public static function display_commondata($record, $nolink=false, $desc=null, $tab=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_commondata($record, $nolink, $desc, $tab);
-    }
-	public static function display_autonumber($record, $nolink=false, $desc=null, $tab=null) {
-		return Utils_RecordBrowser_FieldCommon::display_autonumber($record, $nolink, $desc, $tab);
-    }
-    public static function display_currency($record, $nolink=false, $desc=null, $tab=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_currency($record, $nolink, $desc, $tab);
-    }
-    public static function display_checkbox($record, $nolink=false, $desc=null, $tab=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_checkbox($record, $nolink, $desc, $tab);
-    }
 	public static function display_checkbox_icon($record, $nolink, $desc=null) {
-		return Utils_RecordBrowser_FieldCommon::display_checkbox_icon($record, $nolink, $desc, $tab);
+		$ret = '';
+		if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
+			$ret = '<img src="'.Base_ThemeCommon::get_template_file('images', ($record[$desc['id']]? 'checkbox_on': 'checkbox_off') . '.png') .'">';
+		}
+		
+		return $ret;
     }
-    public static function display_date($record, $nolink, $desc=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_date($record, $nolink, $desc, $tab);
-    }
-    public static function display_timestamp($record, $nolink, $desc=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_timestamp($record, $nolink, $desc, $tab);
-    }
-    public static function display_time($record, $nolink, $desc=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_time($record, $nolink, $desc, $tab);
-    }
-    public static function display_long_text($record, $nolink, $desc=null) {
-    	return Utils_RecordBrowser_FieldCommon::display_long_text($record, $nolink, $desc, $tab);
-    }
+    
+    /**
+     * @param string $arrid
+     * @return string
+     * @deprecated use multicommondata type instead
+     */
     public static function multiselect_from_common($arrid) {
         return '__COMMON__::'.$arrid;
     }
@@ -401,17 +364,9 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         $final_settings = array_merge($final_settings,$settings[2]);
         return array(__('Browsing records')=>$final_settings);
     }
+
     public static function check_table_name($tab, $flush=false, $failure_on_missing=true){
-        static $tables = null;
-        if($tab=='__RECORDSETS__' || preg_match('/,/',$tab)) return true;
-        if ($tables===null || $flush) {
-            $r = DB::GetAll('SELECT tab FROM recordbrowser_table_properties');
-            $tables = array();
-            foreach($r as $v)
-                $tables[$v['tab']] = true;
-        }
-        if (!isset($tables[$tab]) && !$flush && $failure_on_missing) trigger_error('RecordBrowser critical failure, terminating. (Requested '.serialize($tab).', available '.print_r($tables, true).')', E_USER_ERROR);
-        return isset($tables[$tab]);
+        return Utils_RecordBrowser_Recordset::exists($tab, $flush, !$failure_on_missing);
     }
     public static function get_value($tab, $id, $field) {
         self::init($tab);
@@ -478,31 +433,15 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 		return preg_replace('/[^|a-z0-9]/','_',strtolower($f));
 	}
     public static function init($tab, $admin=false, $force=false) {
-        static $cache = array();
-        if (!isset(self::$cols_order[$tab])) self::$cols_order[$tab] = array();
-        $cache_str = $tab.'__'.$admin.'__'.md5(serialize(self::$cols_order[$tab]));
+    	$recordset = Utils_RecordBrowser_Recordset::create($tab, $force);
+    	
+    	// backward compatibility --->
+    	self::$table_rows = $admin? $recordset->getAdminFields(): $recordset->getFields();
+    	
+    	self::$hash = $recordset->getHash();
+    	// <--- backward compatibility
         
-        if (!$force && isset($cache[$cache_str])) {
-            self::$hash = $cache[$cache_str]['hash'];
-            return self::$table_rows = $cache[$cache_str]['table_rows'];
-        }
-        self::$table_rows = array();
-        if($tab=='__RECORDSETS__' || preg_match('/,/',$tab)) return;
-        self::check_table_name($tab);
-		self::display_callback_cache($tab);
-        $ret = DB::Execute('SELECT * FROM '.$tab.'_field'.($admin?'':' WHERE active=1 AND type!=\'page_split\'').' ORDER BY position');
-        self::$hash = array();
-        while($desc = $ret->FetchRow()) {
-            if ($desc['field']=='id') continue;
-
-            if (!$field = Utils_RecordBrowser_Field_Instance::create($tab, $desc)) continue;
-            
-            self::$table_rows[$desc['field']] = $field;
-            
-            self::$hash[$field->getId()] = $field->getName();
-        }
-        $cache[$cache_str] = array('table_rows'=>self::$table_rows,'hash'=>self::$hash);
-        return self::$table_rows;
+    	return $admin? $recordset->getAdminFields(): $recordset->getFields();
     }
 
     public static function install_new_recordset($tab, $fields=array()) {
@@ -883,11 +822,35 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return $ret;
     }
 
-    /**
-     * @deprecated
-     */
     public static function actual_db_type($type, $param=null) {
-    	return Utils_RecordBrowser_FieldCommon::actual_db_type($type, $param);
+    	$f = '';
+    	switch ($type) {
+    		case 'page_split': $f = ''; break;
+    		
+    		case 'text': $f = DB::dict()->ActualType('C').'('.($param?:'50').')'; break;
+    		case 'select':
+    			$param = self::decode_select_param($param);
+    			if($param['single_tab']) $f = DB::dict()->ActualType('I4');
+    			else $f = DB::dict()->ActualType('X');
+    			break;
+    		case 'multiselect': $f = DB::dict()->ActualType('X'); break;
+    		case 'multicommondata': $f = DB::dict()->ActualType('X'); break;
+    		case 'commondata': $f = DB::dict()->ActualType('C').'(128)'; break;
+    		case 'integer': $f = DB::dict()->ActualType('I4'); break;
+    		case 'float': $f = DB::dict()->ActualType('F'); break;
+    		case 'date': $f = DB::dict()->ActualType('D'); break;
+    		case 'timestamp': $f = DB::dict()->ActualType('T'); break;
+    		case 'time': $f = DB::dict()->ActualType('T'); break;
+    		case 'long text': $f = DB::dict()->ActualType('X'); break;
+    		case 'hidden': $f = ($param?:''); break;
+    		case 'calculated': $f = ($param?:''); break;
+    		case 'checkbox': $f = DB::dict()->ActualType('I1'); break;
+    		case 'currency': $f = DB::dict()->ActualType('C').'(128)'; break;
+    		case 'autonumber': $len = strlen(Utils_RecordBrowser_Recordset_Field_Autonumber::formatStr($param));
+    		$f = DB::dict()->ActualType('C') . "($len)"; break;
+    		case 'file': $f = DB::dict()->ActualType('X'); break;
+    	}
+    	return $f;
     }
     public static function new_browse_mode_details_callback($tab, $mod, $func) {
         self::check_table_name($tab);
@@ -1654,7 +1617,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
             return $custom_access_callbacks;
         }
         
-        return isset($custom_access_callbacks[$tab]) ? $custom_access_callbacks[$tab] : array();
+        return $custom_access_callbacks[$tab]?? array();
     }
     public static function call_custom_access_callbacks($tab, $action, $record = null)
     {
@@ -2323,22 +2286,22 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     public static function display_linked_field_label($record, $nolink=false, $desc=null, $tab = ''){
     	return Utils_RecordBrowserCommon::create_linked_label_r($tab, $desc['id'], $record, $nolink);
     }
-    public static function create_linked_label_r($tab, $cols, $r, $nolink=false, $tooltip=false){
-        if (!is_array($cols))
-            $cols = array($cols);
-        $open_tag = self::record_link_open_tag_r($tab, $r, $nolink);
+    public static function create_linked_label_r($tab, $cols, $record, $nolink=false, $tooltip=false){
+       	$cols = is_array($cols)? $cols: [$cols];
+       	
+        $open_tag = self::record_link_open_tag_r($tab, $record, $nolink);
         $close_tag = self::record_link_close_tag();
-        self::init($tab);
+        
+        $recordset = Utils_RecordBrowser_Recordset::create($tab);
+
         $vals = array();
         foreach ($cols as $col) {
-            if (isset(self::$table_rows[$col]))
-                $col = self::$table_rows[$col]['id'];
-            elseif (!isset(self::$hash[$col]))
-                trigger_error('Unknown column name: ' . $col, E_USER_ERROR);
-            if ($r[$col])
-                $vals[] = $r[$col];
+        	$desc = $recordset->getField($col);
+            
+        	if ($record[$desc['id']])
+        		$vals[] = $record[$desc['id']];
         }        
-        $text = self::create_record_tooltip(implode(' ', $vals), $tab, $r['id'], $nolink, $tooltip);
+        $text = self::create_record_tooltip(implode(' ', $vals), $tab, $record['id'], $nolink, $tooltip);
         
         return $open_tag . $text . $close_tag;
     }
@@ -2444,60 +2407,66 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	}
 
 	public static function get_edit_details_modify_record($tab, $rid, $edit_id, $details=true) {
-		self::init($tab);
+		$recordset = Utils_RecordBrowser_Recordset::create($tab);
+		
 		if (is_numeric($rid)) {
 			$prev_rev = DB::GetOne('SELECT MIN(id) FROM '.$tab.'_edit_history WHERE '.$tab.'_id=%d AND id>%d', array($rid, $edit_id));
 			$r = self::get_record_revision($tab, $rid, $prev_rev);
 		} else $r = $rid;
+		
 		$edit_info = DB::GetRow('SELECT * FROM '.$tab.'_edit_history WHERE id=%d',array($edit_id));
-		$event_display = array('what'=>'Error, Invalid event: '.$edit_id);
-		if (!$edit_info) return $event_display;
-
-		$event_display = array(
-							'who'=>Base_UserCommon::get_user_label($edit_info['edited_by'], true),
-							'when'=>Base_RegionalSettingsCommon::time2reg($edit_info['edited_on']),
-							'what'=>array()
-						);
-		$edit_details = DB::GetAssoc('SELECT field, old_value FROM '.$tab.'_edit_history_data WHERE edit_id=%d',array($edit_id));
-        self::init($tab); // because get_user_label messes up
+		
+		if (! $edit_info) return [
+				'what' => 'Error, Invalid event: ' . $edit_id
+		];
+		
+		$event_display = [
+				'who' => Base_UserCommon::get_user_label($edit_info['edited_by'], true),
+				'when' => Base_RegionalSettingsCommon::time2reg($edit_info['edited_on']),
+				'what' => []
+		];
+				
 		foreach ($r as $k=>$v) {
-			if (!isset(self::$hash[$k])) continue;
+			if (!$desc = $recordset->getField($k, true)) continue;
 			
-			$r[$k] = self::$table_rows[self::$hash[$k]]->decodeValue($r[$k]); // We have to decode all fields, because access and some display relay on it, regardless which field changed
+			$r[$k] = $desc->decodeValue($v); // We have to decode all fields, because access and some display relay on it, regardless which field changed
 		}
+		
+		$edit_details = DB::GetAssoc('SELECT field, old_value FROM '.$tab.'_edit_history_data WHERE edit_id=%d', [$edit_id]);
+				
 		$r2 = $r;
 		foreach ($edit_details as $k=>$v) {
-			$k = self::get_field_id($k); // failsafe
-			if (!isset(self::$hash[$k])) continue;
+			if (!$desc = $recordset->getField($k, true)) continue;
 
-			$r2[$k] = $v = $edit_details[$k] = self::$table_rows[self::$hash[$k]]->decodeValue($v);
+			$r2[$k] = $v = $edit_details[$k] = $desc->decodeValue($v);
 		}
-		$access = self::get_access($tab,'view',$r);
-        $modifications_to_show = 0;
+		
+		$access = self::get_access($tab, 'view', $r);
+        $modifications = 0;        
+
 		foreach ($edit_details as $k=>$v) {
             if($k=='id') {
-                $modifications_to_show += 1;
+                $modifications ++;
                 if (!$details) continue; // do not generate content when we dont want them
                 $event_display['what'] = _V($v);
                 continue;
             }
-			$k = self::get_field_id($k); // failsafe
-			if (!isset(self::$hash[$k])) continue;
-			if (!$access[$k]) continue;
-            $modifications_to_show += 1;
+            if (!$access[$k]) continue;
+            
+            if (!$desc = $recordset->getField($k, true)) continue;
+			
+            $modifications ++;
+            
             if (!$details) continue; // do not generate content when we dont want them
-			self::init($tab);
-			$field = self::$hash[$k];
-			$desc = self::$table_rows[$field];
-			$event_display['what'][] = array(
-										_V($desc['name']),
-										self::get_val($tab, $field, $r2, true, $desc),
-										self::get_val($tab, $field, $r, true, $desc)
-									);
+			
+			$event_display['what'][] = [
+					_V($desc['name']),
+					self::get_val($tab, $k, $r2, true),
+					self::get_val($tab, $k, $r, true)
+			];
 		}
-        if ($modifications_to_show)
-            return $event_display;
-        return null;
+        
+        return $modifications? $event_display: null;
 	}
 
     public static function get_edit_details_label($tab, $rid, $edit_id,$details = true) {
@@ -2726,10 +2695,11 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     }
 
     public static function build_cols_array($tab, $arg) {
-        self::init($tab);
+    	$recordset = Utils_RecordBrowser_Recordset::create($tab);
+
         $arg = array_flip($arg);
-        $ret = array();
-        foreach (self::$table_rows as $desc) {
+        $ret = [];
+        foreach ($recordset->getFields() as $desc) {
             if ($desc['visible'] && !isset($arg[$desc['id']])) $ret[$desc['id']] = false;
             elseif (!$desc['visible'] && isset($arg[$desc['id']])) $ret[$desc['id']] = true;
         }
@@ -2891,11 +2861,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
  * @return string|array string by default, array when with_state=true
  */
     public static function get_clipboard_pattern($tab, $with_state = false) {
-        if($with_state) {
-            $ret = DB::GetArray('SELECT pattern,enabled FROM recordbrowser_clipboard_pattern WHERE tab=%s', array($tab));
-            if(sizeof($ret)) return $ret[0];
-        }
-        return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', array($tab));
+    	return Utils_RecordBrowser_Recordset::create($tab)->getClipboardPattern();
     }
 	
 	public static $date_values = array('-1 year'=>'1 year back','-6 months'=>'6 months back','-3 months'=>'3 months back','-2 months'=>'2 months back','-1 month'=>'1 month back','-2 weeks'=>'2 weeks back','-1 week'=>'1 week back','-6 days'=>'6 days back','-5 days'=>'5 days back','-4 days'=>'4 days back','-3 days'=>'3 days back','-2 days'=>'2 days back','-1 days'=>'1 days back','today'=>'current day','+1 days'=>'1 days forward','+2 days'=>'2 days forward','+3 days'=>'3 days forward','+4 days'=>'4 days forward','+5 days'=>'5 days forward','+6 days'=>'6 days forward','+1 week'=>'1 week forward','+2 weeks'=>'2 weeks forward','+1 month'=>'1 month forward','+2 months'=>'2 months forward','+3 months'=>'3 months forward','+6 months'=>'6 months forward','+1 year'=>'1 year forward');
@@ -2930,73 +2896,23 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     }
     
     public static function QFfield_static_display(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	return Utils_RecordBrowser_FieldCommon::QFfield_static_display($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_hidden(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_hidden($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_checkbox(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_checkbox($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_calculated(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_calculated($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_integer(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_integer($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_float(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_float($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_currency(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_currency($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_text(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_text($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_long_text(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_long_text($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_date(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_date($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_timestamp(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_timestamp($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_time(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_time($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_commondata(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_commondata($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_select(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_select($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
-    public static function QFfield_multiselect(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_multiselect($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    	return Utils_RecordBrowser_Recordset_Field::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj);
     }
     
-    public static function QFfield_multicommondata(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_multicommondata($form, $field, $label, $mode, $default, $desc, $rb_obj);
+    public static function __callStatic($method, $args) {
+    	// backward compatibility for QFfield, display callback --->
+    	if (in_array(substr($method, 0, 7), ['QFfield', 'display'])) {
+    		list(, $type) = explode('_', $method);
+    		
+    		if (!$class = Utils_RecordBrowser_Recordset_Field::resolveClass(compact('type'))) return;
+    		
+    		$backwardMethod = 'default' . ucfirst(substr($method, 0, 7)) . 'Callback';
+    		
+    		call_user_func_array([$class, $backwardMethod], $args);
+    	}
+    	// <--- backward compatibility for QFfield, display callback
     }
     
-    public static function QFfield_autonumber(&$form, $field, $label, $mode, $default, $desc, $rb_obj) {
-    	Utils_RecordBrowser_FieldCommon::QFfield_autonumber($form, $field, $label, $mode, $default, $desc, $rb_obj);
-    }
-
 	//region File
 	public static function display_file($r, $nolink=false, $desc=null, $tab=null) {
 		$labels = [];
@@ -3513,6 +3429,26 @@ function rb_and($crits, $_ = null)
 require_once 'modules/Utils/RecordBrowser/object_wrapper/include.php';
 
 Utils_RecordBrowser_Crits::register_special_value_callback(array('Utils_RecordBrowserCommon', 'crits_special_values'));
+
+Utils_RecordBrowser_Recordset_Field::register([
+		'text' => Utils_RecordBrowser_Recordset_Field_Text::class,
+		'long text' => Utils_RecordBrowser_Recordset_Field_LongText::class,
+		'select' => Utils_RecordBrowser_Recordset_Field_Select::class,
+		'multiselect' => Utils_RecordBrowser_Recordset_Field_MultiSelect::class,
+		'commondata' => Utils_RecordBrowser_Recordset_Field_CommonData::class,
+		'multicommondata' => Utils_RecordBrowser_Recordset_Field_MultiCommonData::class,
+		'float' => Utils_RecordBrowser_Recordset_Field_Float::class,
+		'integer' => Utils_RecordBrowser_Recordset_Field_Integer::class,
+		'date' => Utils_RecordBrowser_Recordset_Field_Date::class,
+		'time' => Utils_RecordBrowser_Recordset_Field_Time::class,
+		'timestamp' => Utils_RecordBrowser_Recordset_Field_Timestamp::class,
+		'currency' => Utils_RecordBrowser_Recordset_Field_Currency::class,
+		'checkbox' => Utils_RecordBrowser_Recordset_Field_Checkbox::class,
+		'calculated' => Utils_RecordBrowser_Recordset_Field_Calculated::class,
+		'autonumber' => Utils_RecordBrowser_Recordset_Field_Autonumber::class,
+		'currency' => Utils_RecordBrowser_Recordset_Field_Currency::class,
+		'hidden' => Utils_RecordBrowser_Recordset_Field_Hidden::class,
+]);
 
 if(!READ_ONLY_SESSION) {
     if(!isset($_SESSION['rb_indexer_token']))
