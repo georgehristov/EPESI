@@ -32,13 +32,13 @@ class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBr
        	);
     }
     
-    public function getSqlOrder($direction, $tab_alias='') {
-    	$field_sql_id = $this->getSqlId($tab_alias);
-    	$sort_order = $this['select']['order'];
+    public function getSqlOrder($direction) {
+    	$field_sql_id = $this->getQueryId();
+    	$sort_order = $this['param']['order'];
 	    $ret = false;
 	    if ($sort_order == 'position' || $sort_order == 'value') {
 	    	$sort_field = ($sort_order == 'position')? 'position': 'value';
-	    	$parent_id = Utils_CommonDataCommon::get_id($this['select']['array_id']);
+	    	$parent_id = Utils_CommonDataCommon::get_id($this['param']['array_id']);
 	    	if ($parent_id) {
 		    	$ret = " (SELECT $sort_field FROM utils_commondata_tree AS uct WHERE uct.parent_id=$parent_id AND uct.akey=$field_sql_id) " . $direction;
 		    }

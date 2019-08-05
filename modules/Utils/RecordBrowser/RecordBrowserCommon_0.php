@@ -295,8 +295,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     		$access_crits = self::get_access_crits($tab, 'selection');
     		if ($access_crits===false) unset($ret[$tab]);
     		if ($access_crits===true) continue;
-    		if (is_array($access_crits) || $access_crits instanceof Utils_RecordBrowser_CritsInterface) {
-    			if((is_array($crits) && $crits) || $crits instanceof Utils_RecordBrowser_CritsInterface)
+    		if (is_array($access_crits) || $access_crits instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
+    			if((is_array($crits) && $crits) || $crits instanceof Utils_RecordBrowser_Recordset_Query_Crits)
     				$ret[$tab] = self::merge_crits($crits, $access_crits);
     			else
     				$ret[$tab] = $access_crits;
@@ -1083,51 +1083,47 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	}
 
     public static function new_record( $tab, $values = array()) {
-        self::init($tab);
+    	$fields = Utils_RecordBrowser_Recordset::create($tab)->getFields();
         $user = Acl::get_user();
 
 		$for_processing = $values;
-		foreach(self::$table_rows as $desc)
+		foreach($fields as $desc)
 			$for_processing[$desc['id']] = $for_processing[$desc['id']]?? $desc->defaultValue();
 			
 		$values = self::record_processing($tab, $for_processing, 'add');
 		if ($values===false) return;
 
-        self::init($tab);
-        $fields = 'created_on,created_by,active';
+		$fields_list = 'created_on,created_by,active';
         $fields_types = '%T,%d,%d';
         $vals = array(date('Y-m-d H:i:s'), $user, 1);
-        foreach(self::$table_rows as $desc) {
-        	if (!isset($values[$desc['id']]) || $values[$desc['id']]==='') continue;
-        	$value = & $values[$desc['id']];
-        	$value = !is_array($value)? trim($value): $value;
-
-        	if (!$desc->prepareSqlValue($value)) continue;
+        foreach($fields as $desc) {
+        	if (!$result = $desc->process($values, 'add')) continue;
         	
         	$fields_types .= ',' . $desc->getSqlType();
-        	$fields .= ',' . $desc->getSqlId();
+        	$fields_list .= ',' . $desc->getSqlId();
         	
-        	$vals[] = $value;
+        	$vals[] = $result[$desc->getId()];
         }
-        DB::Execute("INSERT INTO {$tab}_data_1 ({$fields}) VALUES ({$fields_types})",$vals);
+        DB::Execute("INSERT INTO {$tab}_data_1 ({$fields_list}) VALUES ({$fields_types})", $vals);
         $id = DB::Insert_ID($tab.'_data_1', 'id');
-        if ($user) self::add_recent_entry($tab, $user, $id);
-        if (Base_User_SettingsCommon::get('Utils_RecordBrowser',$tab.'_auto_fav'))
-        	DB::Execute("INSERT INTO {$tab}_favorite (user_id, {$tab}_id) VALUES (%d, %d)", [$user, $id]);
-		self::init($tab);
-		$values['id'] = $id;
-		foreach(self::$table_rows as $desc) {
-			$values[$desc['id']] = $values[$desc['id']]?? '';
 
-			$desc->processAddedValue($values[$desc['id']], $values);
+		$values['id'] = $id;
+		foreach($fields as $desc) {
+			$values = $desc->process($values, 'added');
         }
 		
 		self::record_processing($tab, $values, 'added');
 
+		//TODO: Georgi Hristov move below to a seperate record processing callback
+		if ($user) self::add_recent_entry($tab, $user, $id);
+		if (Base_User_SettingsCommon::get('Utils_RecordBrowser',$tab.'_auto_fav'))
+			DB::Execute("INSERT INTO {$tab}_favorite (user_id, {$tab}_id) VALUES (%d, %d)", [$user, $id]);
+		
         if (Base_User_SettingsCommon::get('Utils_RecordBrowser',$tab.'_auto_subs')==1)
             Utils_WatchdogCommon::subscribe($tab,$id);
         Utils_WatchdogCommon::new_event($tab,$id,'C');
-
+		//up to here
+        
         return $id;
     }
 
@@ -1258,13 +1254,13 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         if (is_array($a)) {
             $a = Utils_RecordBrowser_Crits::from_array($a);
         }
-        if (!($a instanceof Utils_RecordBrowser_Crits)) {
+        if (!($a instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound)) {
             $a = new Utils_RecordBrowser_Crits($a);
         }
         if (is_array($b)) {
             $b = Utils_RecordBrowser_Crits::from_array($b);
         }
-        if (!($b instanceof Utils_RecordBrowser_Crits)) {
+        if (!($b instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound)) {
             $b = new Utils_RecordBrowser_Crits($b);
         }
         if ($a->is_empty()) {
@@ -1301,8 +1297,9 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
             $admin_filter = $tab_alias . '.active=1 AND ';
         }
         array_push($stack, $tab);
-        $query_builder = new Utils_RecordBrowser_QueryBuilder($tab, $tab_alias, $admin);
-        $ret = $query_builder->build_query($crits, $order, $admin_filter);
+        $recordset = Utils_RecordBrowser_Recordset::create($tab)->setTabAlias($tab_alias);
+        
+        $ret = Utils_RecordBrowser_Recordset_Query_Builder::create($recordset, $admin)->build_query($crits, $order, $admin_filter);
         $cache[$cache_key] = $ret;
         array_pop($stack);
         return $ret;
@@ -1368,27 +1365,32 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         }
         if (!$order) $order = array();
         $tab_alias = 'r';
-        $fields = "$tab_alias.*";
-        self::init($tab);
-        $par = self::build_query($tab, $crits, $admin, $order);
+        $par = self::build_query($tab, $crits, $admin, $order, $tab_alias);
         if (empty($par)) return array();
-        $ret = DB::SelectLimit('SELECT '.$fields.' FROM'.$par['sql'].$par['order'], $limit['numrows'], $limit['offset'], $par['vals']);
-        $records = array();
-        self::init($tab);
-        $fields = self::$table_rows;
+        $ret = DB::SelectLimit('SELECT ' . $tab_alias . '.* FROM'.$par['sql'].$par['order'], $limit['numrows'], $limit['offset'], $par['vals']);
+        $records = [];
+        $fields = Utils_RecordBrowser_Recordset::create($tab)->getFields();
         while ($row = $ret->FetchRow()) {
-            if (isset($records[$row['id']])) {
-                continue;
+            if (isset($records[$row['id']])) continue;
+
+			$record = [
+					'id' => $row['id'],
+					':active' => $row['active'],
+					'created_by' => $row['created_by'],
+					'created_on' => $row['created_on']
+			];
+			
+			foreach ($fields as $desc) {
+				$sqlId = $desc->getSqlId();
+
+				$record[$desc['id']] = isset($row[$sqlId])? $desc->decodeValue($row[$sqlId]): $desc->defaultValue();
             }
-            $r = array( 'id'=>$row['id'],
-                        ':active'=>$row['active'],
-                        'created_by'=>$row['created_by'],
-                        'created_on'=>$row['created_on']);
-            foreach($fields as $desc){
-            	$r[$desc['id']] = isset($row[$desc->getSqlId()])? $desc->decodeValue($row[$desc->getSqlId()]): $desc->defaultValue();
-            }
-            if($admin || self::get_access($tab,'view',$r)) $records[$row['id']] = $r;
+            
+            if (!$admin && !self::get_access($tab, 'view', $record)) continue;
+            
+            $records[$row['id']] = $record;
         }
+
         return $records;
     }
     public static function check_record_against_crits($tab, $id, $crits, & $problems = array()) {
@@ -1651,7 +1653,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 			foreach ($crits as $mode => $c) {
 				$c = is_array($c) ? Utils_RecordBrowser_Crits::from_array($c): $c;
 				
-				if ($c instanceof Utils_RecordBrowser_Crits) 
+				if ($c instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound) 
 					$ret[$mode] = ($ret[$mode] !== null) ? self::merge_crits($ret[$mode], $c, $mode === 'grant'): $c;
 				elseif (is_bool($c))
 					$ret[$mode] = $c;
@@ -1779,23 +1781,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return  Utils_TooltipCommon::format_info_tooltip($htmlinfo);
     }
     public static function get_record($tab, $id, $htmlspecialchars=true) {
-        if (!is_numeric($id)) return null;
-        if (isset($id)) {
-            if(!self::check_table_name($tab,false,false)) return null;
-            self::init($tab);
-            $row = DB::GetRow("SELECT * FROM {$tab}_data_1 WHERE id=%d", [$id]);
-            $record = ['id'=>$id];
-            if (!isset($row['active'])) return null;
-            foreach(array('created_by','created_on') as $v)
-                $record[$v] = $row[$v];
-            $record[':active'] = $row['active'];
-            foreach(self::$table_rows as $desc) {
-            	$record[$desc['id']] = isset($row[$desc->getSqlId()])? $desc->decodeValue($row[$desc->getSqlId()], $htmlspecialchars): $desc->defaultValue();
-            }
-            return $record;
-        } else {
-            return null;
-        }
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id, $htmlspecialchars);
     }
 
     public static function get_record_respecting_access($tab, $id, $access_mode = 'view', $htmlspecialchars = true)
@@ -2297,7 +2283,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         $vals = array();
         foreach ($cols as $col) {
         	$desc = $recordset->getField($col);
-            
+
         	if ($record[$desc['id']])
         		$vals[] = $record[$desc['id']];
         }        
@@ -2767,8 +2753,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
             
             $access_crits = self::get_access_crits($t, 'selection');
             if ($access_crits===false) continue;
-            if ($access_crits!==true && (is_array($access_crits) || $access_crits instanceof Utils_RecordBrowser_CritsInterface)) {
-            	if((is_array($tab_crits[$t]) && $tab_crits[$t]) || $tab_crits[$t] instanceof Utils_RecordBrowser_CritsInterface)
+            if ($access_crits!==true && (is_array($access_crits) || $access_crits instanceof Utils_RecordBrowser_Recordset_Query_Crits)) {
+            	if((is_array($tab_crits[$t]) && $tab_crits[$t]) || $tab_crits[$t] instanceof Utils_RecordBrowser_Recordset_Query_Crits)
             		$tab_crits[$t] = self::merge_crits($tab_crits[$t], $access_crits);
                 else 
                 	$tab_crits[$t] = $access_crits;

@@ -20,15 +20,15 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
 		return false;
 	}	
 	
-	public function prepareSqlValue(& $valueprepareSqlValue) {
-		return $this->isStored();
+	public function processAdd($values) {
+		return $this->isStored()? $values: false;
 	}
 	
 	public function isStored() {
 		return preg_match('/^[a-z]+(\([0-9]+\))?$/i',$this->getParam())!==0;
 	}
 	
-    public function getSqlOrder($direction, $tab_alias='') {
+    public function getSqlOrder($direction) {
     	$param = explode('::', $this->getParam());
     	if (isset($param[1]) && $param[1] != '') {
     		$tab2 = $param[0];
@@ -37,18 +37,21 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
     		$first_col = explode('/', $first_col);
     		$data_col = isset($first_col[1]) ? $this->getFieldId($first_col[1]) : $this->getId();
     		$field_id2 = Utils_RecordBrowserCommon::get_field_id($first_col[0]);
-    		$val = '(SELECT rdt.f_'.$field_id2.' FROM '.$this->getTab().'_data_1 AS rd LEFT JOIN '.$tab2.'_data_1 AS rdt ON rdt.id=rd.f_'.$data_col.' WHERE '.$tab_alias.'.id=rd.id)';
+    		$val = '(SELECT rdt.f_'.$field_id2.' FROM '.$this->getTab().'_data_1 AS rd LEFT JOIN '.$tab2.'_data_1 AS rdt ON rdt.id=rd.f_'.$data_col.' WHERE '.$this->getRecordset()->getTabAlias().'.id=rd.id)';
     	} else {
-    		$val = $this->getSqlId($tab_alias);
+    		$val = $this->getQueryId();
     	}
     	return ' ' . $val . ' ' . $direction;
     }
     
-    public function handleCrits($operator, $value, $tab_alias='') {
-        if (!$this->getParam()) return array('false', array());
+    public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Single $crit) {
+    	if (!$this->getParam()) return Utils_RecordBrowser_Recordset_Query_Section::create('false');
+    	
+    	$field = $this->getQueryId();
+    	$operator = $crit->getSqlOperator();
+    	$value = $crit->getSqlValue();
 
-        $field = $this->getSqlId($tab_alias);
-        $vals = array();
+        $vals = [];
         if (DB::is_postgresql()) $field .= '::varchar';
         if (!$value) {
             $sql = "$field IS NULL OR $field=''";
@@ -56,13 +59,14 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
             $sql = "$field $operator %s AND $field IS NOT NULL";
             $vals[] = $value;
         }
-        return array($sql, $vals);
+        
+        return Utils_RecordBrowser_Recordset_Query_Section::create($sql, $vals);
     }
     
-    public function handleCritsRawSql($operator, $value, $tab_alias='') {
-    	if (!$this->getParam()) return array('false', array());
+    public function handleCritsRawSql($field, $operator, $value) {
+    	if (!$this->getParam()) return ['false', []];
     	
-    	return array($this->getSqlId($tab_alias) . " $operator $value", array());
+    	return [$this->getQueryId() . " $operator $value", []];
     }   
     
     public static function getAjaxTooltip($opts) {

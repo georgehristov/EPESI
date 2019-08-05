@@ -1400,7 +1400,7 @@ class Utils_RecordBrowser extends Module {
 		    $problems = array();
             if (!Utils_RecordBrowserCommon::check_record_against_crits($this->getTab(), $data, $crits, $problems)) {
                 foreach ($problems as $c) {
-                    if ($c instanceof Utils_RecordBrowser_CritsSingle) {
+                    if ($c instanceof Utils_RecordBrowser_Recordset_Query_Crits_Single) {
                         list($f, $subf) = Utils_RecordBrowser_CritsSingle::parse_subfield($c->get_field());
                         $ret[$f] = __('Invalid value');
                     }

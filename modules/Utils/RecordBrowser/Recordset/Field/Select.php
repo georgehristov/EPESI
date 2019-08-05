@@ -60,14 +60,14 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		]);
 	}
 	
-	public function prepareSqlValue(& $value) {
-		$value = $this->encodeValue($value);
+	public function processAdd($values) {
+		$value = $this->encodeValue($values[$this->getId()]);
 		
 		//---> backward compatibility
-		$value = str_replace(array('P:', 'C:'), array('contact/', 'company/'), $value);
+		$values[$this->getId()] = str_replace(['P:', 'C:'], ['contact/', 'company/'], $value);
 		//<--- backward compatibility
 		
-		return true;
+		return $values;
 	}
 	
 	public function getSelectOptions($record=null) {
@@ -192,8 +192,8 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 				$access = Utils_RecordBrowserCommon::get_access($tab, 'selection', null, true);
 				if ($access===false) unset($ret[$tab]);
 				if ($access===true) continue;
-				if (is_array($access) || $access instanceof Utils_RecordBrowser_CritsInterface) {
-					if((is_array($crits) && $crits) || $crits instanceof Utils_RecordBrowser_CritsInterface)
+				if (is_array($access) || $access instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
+					if((is_array($crits) && $crits) || $crits instanceof Utils_RecordBrowser_Recordset_Query_Crits)
 						$ret[$tab] = Utils_RecordBrowserCommon::merge_crits($crits, $access);
 					else
 						$ret[$tab] = $access;
@@ -248,12 +248,11 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 			return implode('__', array($order, $array_id));
 	}
 	
-	public function getSqlOrder($direction, $tab_alias='') {
-		$field_sql_id = $this->getSqlId($tab_alias);
-		
-		$tab2 = $this['select']['single_tab'];
-		$cols2 = $this['select']['cols'];
-		$val = $field_sql_id;
+	public function getSqlOrder($direction) {
+
+		$tab2 = $this['param']['single_tab'];
+		$cols2 = $this['param']['cols'];
+		$val = $this->getQueryId();
 		$fields2 = Utils_RecordBrowserCommon::init($tab2);
 		// search for better sorting than id
 		if ($fields2) {
@@ -262,7 +261,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 					$desc2 = $fields2[$referenced_col];
 					if ($desc2['type'] != 'calculated' || $desc2['param'] != '') {
 						$field_id2 = Utils_RecordBrowserCommon::get_field_id($referenced_col);
-						$val = '(SELECT rdt.f_'.$field_id2.' FROM '.$tab2.'_data_1 AS rdt WHERE rdt.id='.$field_sql_id.')';
+						$val = '(SELECT rdt.f_'.$field_id2.' FROM '.$tab2.'_data_1 AS rdt WHERE rdt.id='.$this->getQueryId().')';
 						break;
 					}
 				}
@@ -272,12 +271,23 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		return ' ' . $val . ' ' . $direction;
 	}
 	
-	public function handleCrits($operator, $value, $tab_alias='') {
+	public function handleCrits($field, $operator, $value) {
+		return $this->handleCritsSelect($field, $operator, $value);
+	}
+	
+	
+	public function handleCritsRawSql($field, $operator, $value, $rawSql) {
+		return $this->handleCritsSelect($field, $operator, $value, $rawSql);
+	}
+	
+	protected function handleCritsSelect($field, $operator, $value, $rawSql = false) {
 		$param = $this->getParam();
 		
 		$sql = '';
-		$vals = array();
+		$vals = [];
 		list($field, $sub_field) = Utils_RecordBrowser_CritsSingle::parse_subfield($field);
+		
+		$field = $this->getQueryId();
 		
 		$tab2 = $param['single_tab'];
 		
@@ -318,7 +328,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 			foreach ($col2 as $col) {
 				$col = $col[0] == ':' ? $col : self::getFieldId(trim($col));
 				if ($col) {
-					$crits->_or(new Utils_RecordBrowser_CritsSingle($col, $operator, $value, false, $raw_sql_val));
+					$crits->_or(new Utils_RecordBrowser_CritsSingle($col, $operator, $value, false, $rawSql));
 				}
 			}
 			if (!$crits->is_empty()) {
@@ -330,7 +340,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 				}
 			}
 		} else {
-			if ($raw_sql_val) {
+			if ($rawSql) {
 				$sql = "$field $operator $value";
 			} elseif (!$value) {
 				$sql = "$field IS NULL";
@@ -368,10 +378,6 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 			$sql = "($field IS NOT NULL AND ($q))";
 		}
 		return array($sql, $vals);
-	}
-	
-	public function handleCritsRawSql($operator, $value, $tab_alias='') {
-		//TODO: add this
 	}
 	
 	public function getAjaxTooltipOpts() {

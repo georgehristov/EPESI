@@ -2,35 +2,31 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowser_Recordset_Field_Select {
+class Utils_RecordBrowser_Recordset_Field_File extends Utils_RecordBrowser_Recordset_Field_MultiSelect {
 	
 	public static function typeLabel() {
-		return __('Multiselect');
+		return __('File');
 	}
 	
-	public function defaultValue() {
-		return [];
-	}	
-	
-	public static function decodeValue($value, $htmlspecialchars = true) {
-		return Utils_RecordBrowserCommon::decode_multi($value);
-	}
-	
-	public function prepareSqlValue(& $files) {
-		$files = $this->decodeValue($files);
+	public function processAdd($values) {
+		$files = $this->decodeValue($values[$this->getId()]);
+		
 		if ($this['param']['max_files'] && count($files) > $this['param']['max_files']) {
 			throw new Exception('Too many files in field ' . $this['id']);
 		}
-		$files = $this->encodeValue(Utils_FileStorageCommon::add_files($files));
-		return true;
+		
+		$values[$this->getId()] = $this->encodeValue(Utils_FileStorageCommon::add_files($files));
+		
+		return $values;
 	}
 	
-	public function processAddedValue($value, $record) {
+	public function processAdded($values) {
 		// update backref
-		$value = $this->decodeValue($value);
-		Utils_FileStorageCommon::add_files($value, "rb:$this[tab]/$record[id]/$this[pkey]");
+		$value = $this->decodeValue($values[$this->getId()]);
 		
-		return $value;
+		Utils_FileStorageCommon::add_files($value, "rb:$this[tab]/$values[id]/$this[pkey]");
+		
+		return $values;
 	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {

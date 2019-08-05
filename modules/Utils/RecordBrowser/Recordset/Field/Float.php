@@ -14,21 +14,21 @@ class Utils_RecordBrowser_Recordset_Field_Float extends Utils_RecordBrowser_Reco
 		]);
 	}
 	
-    public function handleCrits($operator, $value, $tab_alias='') {
-    	$field = $this->getSqlId($tab_alias);
+    public function handleCrits($field, $operator, $value) {
+    	$field = $this->getQueryId();
     	 
     	if ($operator == DB::like()) {
             if (DB::is_postgresql()) $field .= '::varchar';
-            return array("$field $operator %s", array($value));
+            return ["$field $operator %s", [$value]];
         }
-        $vals = array();
+        $vals = [];
         if ($value === '' || $value === null || $value === false) {
             $sql = "$field IS NULL";
         } else {
             $sql = "$field $operator %f AND $field IS NOT NULL";
             $vals[] = $value;
         }
-        return array($sql, $vals);
+        return [$sql, $vals];
     }
     
     public static function getAjaxTooltip($opts) {

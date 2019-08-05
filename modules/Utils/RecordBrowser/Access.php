@@ -84,18 +84,18 @@ class Utils_RecordBrowser_Access
 		foreach ( $ruleCrits as $ruleId => $c ) {
 			if ($ruleId === 'restrict') continue;
 			
-			if (! $c instanceof Utils_RecordBrowser_CritsInterface) continue;
+			if (! $c instanceof Utils_RecordBrowser_Recordset_Query_Crits) continue;
 			
 			// if crit is empty, then we have access to all records
 			if ($c->is_empty()) $ret = $c;
 			
-			if ($ret instanceof Utils_RecordBrowser_Crits && $ret->is_empty()) continue;
+			if ($ret instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound && $ret->is_empty()) continue;
 			
 			$ret = Utils_RecordBrowserCommon::merge_crits($ret, $c, true);
 		}
 		
 		// if there is any access granted - limit it based on restrict crits
-		if ($ret !== null && $ruleCrits['restrict'] instanceof Utils_RecordBrowser_Crits) $ret = Utils_RecordBrowserCommon::merge_crits($ret, $ruleCrits['restrict']);
+		if ($ret !== null && $ruleCrits['restrict'] instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound) $ret = Utils_RecordBrowserCommon::merge_crits($ret, $ruleCrits['restrict']);
 		
 		return $ret;
 	}
@@ -199,7 +199,7 @@ class Utils_RecordBrowser_Access
 			foreach ( $crits as $mode => $c ) {
 				$c = is_array($c) ? Utils_RecordBrowser_Crits::from_array($c): $c;
 				
-				if ($c instanceof Utils_RecordBrowser_Crits) $ret[$mode] = ($ret[$mode] !== null) ? Utils_RecordBrowserCommon::merge_crits($ret[$mode], $c, $mode === 'grant'): $c;
+				if ($c instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound) $ret[$mode] = ($ret[$mode] !== null) ? Utils_RecordBrowserCommon::merge_crits($ret[$mode], $c, $mode === 'grant'): $c;
 				elseif (is_bool($c)) $ret[$mode] = $c;
 			}
 		}
@@ -217,7 +217,7 @@ class Utils_RecordBrowser_Access
 		
 		$ruleCrits = $this->getRuleCrits();
 		
-		if ($this->record != null && $this->action !== 'add' && $ruleCrits['restrict'] instanceof Utils_RecordBrowser_CritsInterface && ! Utils_RecordBrowserCommon::check_record_against_crits($this->tab, $this->record, $ruleCrits['restrict'])) {
+		if ($this->record != null && $this->action !== 'add' && $ruleCrits['restrict'] instanceof Utils_RecordBrowser_Recordset_Query_Crits && ! Utils_RecordBrowserCommon::check_record_against_crits($this->tab, $this->record, $ruleCrits['restrict'])) {
 			return false;
 		}
 		
@@ -225,7 +225,7 @@ class Utils_RecordBrowser_Access
 		foreach ( $ruleCrits as $rule_id => $c ) {
 			if ($rule_id === 'restrict') continue;
 			
-			if (! $c instanceof Utils_RecordBrowser_CritsInterface) continue;
+			if (! $c instanceof Utils_RecordBrowser_Recordset_Query_Crits) continue;
 			
 			if ($this->record != null && ! Utils_RecordBrowserCommon::check_record_against_crits($this->tab, $this->record, $c)) continue;
 			

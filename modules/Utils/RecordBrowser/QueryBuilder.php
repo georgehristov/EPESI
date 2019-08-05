@@ -47,9 +47,9 @@ class Utils_RecordBrowser_QueryBuilder
         if ($crits->is_active() == false) {
             return array('', array());
         }
-        if ($crits instanceof Utils_RecordBrowser_CritsSingle) {
+        if ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_Single) {
             return $this->build_single_crit_query($crits);
-        } elseif ($crits instanceof Utils_RecordBrowser_Crits) {
+        } elseif ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound) {
             $vals = array();
             $sql = array();
             foreach ($crits->get_component_crits() as $c) {
@@ -65,7 +65,7 @@ class Utils_RecordBrowser_QueryBuilder
                 $sql_str = "NOT ($sql_str)";
             }
             return array($sql_str, $vals);
-        } elseif ($crits instanceof Utils_RecordBrowser_CritsRawSQL) {
+        } elseif ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_RawSQL) {
             $sql = $crits->get_negation() ? $crits->get_negation_sql() : $crits->get_sql();
             return array($sql, $crits->get_vals());
         }

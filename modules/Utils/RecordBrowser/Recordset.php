@@ -9,6 +9,7 @@ interface Utils_RecordBrowser_RecordsetInterface {
 class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInterface {
 	protected static $cache = [];
 	protected $tab;
+	protected $tabAlias = 'r';
 	protected $properties = [];	
 	protected $admin;
 	/**
@@ -161,7 +162,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 	
 	protected function __construct($tab) {
-		if (!self::validateName($tab) || !self::exists($tab)) return;
+		if (!$this->validateName($tab) || !$this->exists($tab)) return;
 
 		$this->setTab($tab);
 	}	
@@ -174,8 +175,14 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		if (!$field = Utils_RecordBrowser_Recordset_Field::create($this, $desc)) return;
 		
 		$this->adminFields[$desc['field']] = $field;
+
+		return $this;
 	}
 	
+	/**
+	 * @param string $order
+	 * @return Utils_RecordBrowser_Recordset_Field[]
+	 */
 	public function getFields($order = 'position') {
 		$this->displayFields = $this->displayFields?: array_filter($this->getAdminFields(), function (Utils_RecordBrowser_Recordset_Field $field) {
 			return $field['active'] && $field['type'] != 'page_split';
@@ -294,6 +301,29 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
 	}
 		
+	public function getRecord($id, $htmlspecialchars = true) {
+		if (!is_numeric($id) || !isset($id)) return;
+		
+		$row = DB::GetRow("SELECT * FROM {$this->getTab()}_data_1 WHERE id=%d", [$id]);
+		
+		if (!isset($row['active'])) return;
+		
+		$record = [
+				'id' => $id,
+				'created_by' => $row['created_by'],
+				'created_on' => $row['created_on'],
+				':active' => $row['active']
+		];
+		
+		foreach($this->getFields() as $field) {
+			$sqlId = $field->getSqlId();
+			
+			$record[$field->getId()] = isset($row[$sqlId])? $field->decodeValue($row[$sqlId], $htmlspecialchars): $field->defaultValue();
+		}
+		
+		return $record;
+	}
+		
 	/**
 	 * @return string
 	 */
@@ -309,6 +339,16 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		return $this;
 	}
+	public function getTabAlias() {
+		return $this->tabAlias;
+	}
+
+	public function setTabAlias($tabAlias) {
+		$this->tabAlias = $tabAlias;
+		
+		return $this;
+	}
+
 }
 
 

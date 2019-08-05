@@ -16,10 +16,10 @@ class Utils_RecordBrowser_Recordset_Field_Time extends Utils_RecordBrowser_Recor
 		]);
 	}
 	
-    public function handleCrits($operator, $value, $tab_alias='') {
-    	$field = $this->getSqlId($tab_alias);
+    public function handleCrits($field, $operator, $value) {
+    	$field = $this->getQueryId();
     	 
-    	$vals = array();
+    	$vals = [];
         if (!$value) {
             $sql = "$field IS NULL";
         } else {
@@ -27,7 +27,7 @@ class Utils_RecordBrowser_Recordset_Field_Time extends Utils_RecordBrowser_Recor
             $sql = "$field $operator %s";
             $vals[] = $value;
         }
-        return array($sql, $vals);
+        return [$sql, $vals];
     }
 
     public static function getAjaxTooltip($opts) {

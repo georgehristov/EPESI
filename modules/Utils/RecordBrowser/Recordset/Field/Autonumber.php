@@ -28,11 +28,12 @@ class Utils_RecordBrowser_Recordset_Field_Autonumber extends Utils_RecordBrowser
     	return array_combine(['prefix', 'pad_length', 'pad_mask'], $parsed);
     }
     
-    public function processAddedValue($value, $record) {
-    	$value = self::formatStr($this['param'], $record['id']);
-    	Utils_RecordBrowserCommon::update_record($this->getTab(), $record['id'], [$this->getId() => $value], false, null, true);
+    public function processAdded($values) {
+    	$values[$this->getId()] = self::formatStr($this['param'], $values['id']);
     	
-    	return $value;
+    	Utils_RecordBrowserCommon::update_record($this->getTab(), $values['id'], [$this->getId() => $values[$this->getId()]], false, null, true);
+    	
+    	return $values;
     }
     
     protected static function formatStr($param, $id = null) {

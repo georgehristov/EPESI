@@ -52,26 +52,29 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     	return implode('__', [$order, $array_id]);
     }
     
-    public function getSqlOrder($direction, $tab_alias='') {
-    	$field_sql_id = $this->getSqlId($tab_alias);
-    	$sort_order = $this['select']['order'];
+    public function getSqlOrder($direction) {
+    	$sort_order = $this['param']['order'];
 	    $ret = false;
 	    if ($sort_order == 'position' || $sort_order == 'value') {
 	    	$sort_field = ($sort_order == 'position')? 'position': 'value';
-	    	$parent_id = Utils_CommonDataCommon::get_id($this['select']['array_id']);
+	    	$parent_id = Utils_CommonDataCommon::get_id($this['param']['array_id']);
 	    	if ($parent_id) {
-		    	$ret = " (SELECT $sort_field FROM utils_commondata_tree AS uct WHERE uct.parent_id=$parent_id AND uct.akey=$field_sql_id) " . $direction;
+		    	$ret = " (SELECT $sort_field FROM utils_commondata_tree AS uct WHERE uct.parent_id=$parent_id AND uct.akey={$this->getQueryId()}) " . $direction;
 		    }
 	    }
  
-	    return $ret?: ' ' . $field_sql_id . ' ' . $direction; // key or if position or value failed
+	    return $ret?: ' ' . $this->getQueryId() . ' ' . $direction; // key or if position or value failed
     }
         
-    public function handleCrits($operator, $value, $tab_alias='') {
-    	list($field, $sub_field) = Utils_RecordBrowser_CritsSingle::parse_subfield($this->getSqlId($tab_alias));
+    public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Single $crit) {
+    	$field = $this->getQueryId();
+    	$operator = $crit->getSqlOperator();
+    	$value = $crit->getSqlValue();
+    	
+    	list(, $sub_field) = Utils_RecordBrowser_Recordset_Query_Crits_Single::parse_subfield($crit->get_field());
 
     	if ($value === null || $value === false || $value === '') {
-    		return array("$field IS NULL OR $field=''", array());
+    		return Utils_RecordBrowser_Recordset_Query_Section::create("$field IS NULL OR $field=''");
     	}
     	
     	if ($sub_field !== false) { // may be empty string for value lookup with field[]
@@ -84,15 +87,15 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     			$operator = '=';
     		}
     	} else {
-    		$final_vals = array($value);
+    		$final_vals = [$value];
     	}
     	
     	if ($this->multiselect) {
     		$operator = DB::like();
     	}
     	
-    	$sql = array();
-    	$vals = array();
+    	$sql = [];
+    	$vals = [];
     	foreach ($final_vals as $val) {
     		$sql[] = "($field $operator %s AND $field IS NOT NULL)";
     		if ($this->multiselect) {
@@ -100,14 +103,14 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     		}
     		$vals[] = $val;
     	}
-    	$sql_str = implode(' OR ', $sql);
-    	return array($sql_str, $vals);
+
+    	return Utils_RecordBrowser_Recordset_Query_Section::create(implode(' OR ', $sql), $vals);
     }
     
-    public function handleCritsRawSql($operator, $value, $tab_alias='') {
-    	list($field, ) = Utils_RecordBrowser_CritsSingle::parse_subfield($this->getSqlId($tab_alias));
+    public function handleCritsRawSql($field, $operator, $value) {
+    	list($field, ) = Utils_RecordBrowser_CritsSingle::parse_subfield($field);
     	
-    	return array($field . " $operator $value", array());
+    	return [$field . " $operator $value", []];
     }
 
     public function getAjaxTooltipOpts() {

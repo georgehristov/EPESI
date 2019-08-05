@@ -277,12 +277,16 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return Utils_RecordBrowserCommon::get_sql_type($this->getType());
 	}
 	
-	public function getSqlId($tab_alias='') {
-		return ($tab_alias? $tab_alias. '.':'') . 'f_' . $this->getId();
+	public function getQueryId() {
+		return implode('.', array_filter([$this->getRecordset()->getTabAlias(), $this->getSqlId()]));
+	}
+	
+	public function getSqlId() {
+		return 'f_' . $this->getId();
 	}
 
-	public function getSqlOrder($direction, $tab_alias='') {
-		return ' ' . $this->getSqlId($tab_alias) . ' ' . $direction;
+	public function getSqlOrder($direction) {
+		return ' ' . $this->getQueryId() . ' ' . $direction;
 	}
 	
 	public function getLabel() {
@@ -313,23 +317,36 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return '';
 	}
 	
-	public function handleCrits($operator, $value, $tab_alias='') {
-		$field = $this->getSqlId($tab_alias);
+	public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+		
+		$field = $this->getQueryId();
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
 		
 		$vals = [];
 		if ($operator == DB::like() && ($value == '%' || $value == '%%')) {
 			$sql = 'true';
 		} elseif (!$value) {
-			$sql = "$field IS NULL OR $field=''";
+			$sql_null = stripos($operator, '!') !== false? 'NOT': '';
+			
+			$sql = "$field IS $sql_null NULL OR $field $operator ''";
 		} else {
 			$sql = "$field $operator %s AND $field IS NOT NULL";
 			$vals[] = $value;
 		}
-		return [$sql, $vals];
+		
+		return Utils_RecordBrowser_Recordset_Query_Section::create($sql, $vals);
 	}
 	
-	public function handleCritsRawSql($operator, $value, $tab_alias='') {
-		return array($this->getSqlId($tab_alias) . " $operator $value", array());
+	public function getRawSQLQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+		
+		return Utils_RecordBrowser_Recordset_Query_Section::create($this->getQueryId() . " $operator $value");
 	}
 	
 	public final function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj) {

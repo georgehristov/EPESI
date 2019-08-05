@@ -28,12 +28,14 @@ class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_R
     	return isset($rb_obj->display_callback_table[$desc->getId()])? parent::createQFfieldStatic($form, $mode, $default, $rb_obj): false;
     }
     
-    public function handleCrits($operator, $value, $tab_alias='') {
-    	$field = $this->getSqlId($tab_alias);
+    public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Single $crit) {
+    	$field = $this->getQueryId();    	
+    	$operator = $crit->getSqlOperator();
+    	$value = $crit->getSqlValue();
     
     	if ($operator == DB::like()) {
             if (DB::is_postgresql()) $field .= '::varchar';
-            return array("$field $operator %s", array($value));
+            return Utils_RecordBrowser_Recordset_Query_Section::create("$field $operator %s", [$value]);
         }
         if ($operator == '!=') {
             $sql = $value ?
@@ -44,9 +46,10 @@ class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_R
                     "$field IS NOT NULL AND $field=%b" :
                     "$field IS NULL OR $field=%b";
         }
-        return array($sql, array($value ? true : false));
-    }    
-
+        
+        return Utils_RecordBrowser_Recordset_Query_Section::create($sql, [$value ? true : false]);
+    }   
+    
     public static function getAjaxTooltip($opts) {
     	return __('Click to switch between checked/unchecked state');
     }

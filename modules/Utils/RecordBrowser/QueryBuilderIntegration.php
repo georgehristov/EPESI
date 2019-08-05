@@ -307,7 +307,7 @@ class Utils_RecordBrowser_QueryBuilderIntegration
     public static function crits_to_json(Utils_RecordBrowser_CritsInterface $crits)
     {
         $crits->normalize();
-        if ($crits instanceof Utils_RecordBrowser_Crits) {
+        if ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound) {
             $cc = $crits->get_component_crits();
             $condition = $crits->get_join_operator();
             if (!$condition) $condition = 'AND';
@@ -321,7 +321,7 @@ class Utils_RecordBrowser_QueryBuilderIntegration
             }
             $ret['rules'] = $rules;
             return $ret;
-        } elseif ($crits instanceof Utils_RecordBrowser_CritsSingle) {
+        } elseif ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_Single) {
             $values = $crits->get_value();
             if (!is_array($values)) {
                 $values = array($values);
@@ -342,7 +342,7 @@ class Utils_RecordBrowser_QueryBuilderIntegration
                 $ret = reset($ret);
             }
             return $ret;
-        } elseif ($crits instanceof Utils_RecordBrowser_CritsRawSQL) {
+        } elseif ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_RawSQL) {
 
         } else {
             throw new Exception("crits to json exporter: unsupported class: " . get_class($crits));
@@ -352,7 +352,7 @@ class Utils_RecordBrowser_QueryBuilderIntegration
     public static function json_to_crits($json)
     {
         // backward compatibility check
-        if ($json instanceof Utils_RecordBrowser_CritsInterface) {
+        if ($json instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
             return $json;
         }
         $array = json_decode($json, true);

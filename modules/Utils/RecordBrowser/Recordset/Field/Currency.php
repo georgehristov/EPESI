@@ -15,19 +15,19 @@ class Utils_RecordBrowser_Recordset_Field_Currency extends Utils_RecordBrowser_R
 		]);
 	}
 	
-    public function getSqlOrder($direction, $tab_alias='') {
-    	$field_sql_id = $this->getSqlId($tab_alias);
+    public function getSqlOrder($direction) {
+    	$sqlId = $this->getQueryId();
     	
     	if (DB::is_mysql()) {
-	    	$field_sql_id = "CAST($field_sql_id as DECIMAL(64,5))";
+	    	$sqlId = "CAST($sqlId as DECIMAL(64,5))";
 	    } elseif (DB::is_postgresql()) {
-	    	$field_sql_id = "CAST(COALESCE(NULLIF(split_part($field_sql_id, '__', 1),''),'0') as DECIMAL)";
+	    	$sqlId = "CAST(COALESCE(NULLIF(split_part($sqlId, '__', 1),''),'0') as DECIMAL)";
 	    }
-        return ' ' . $field_sql_id . ' ' . $direction;
+        return ' ' . $sqlId . ' ' . $direction;
     }
     
-    public function handleCrits($operator, $value, $tab_alias='') {
-    	$field = $this->getSqlId($tab_alias);
+    public function handleCrits($field, $operator, $value) {
+    	$field = $this->getQueryId();
     	 
     	if ($operator == DB::like()) {
             if (DB::is_postgresql()) $field .= '::varchar';
