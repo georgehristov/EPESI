@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Date extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'date';
+	}
+	
 	public static function typeLabel() {
-		return __('Date');
+		return _M('Date');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -60,5 +64,15 @@ class Utils_RecordBrowser_Recordset_Field_Date extends Utils_RecordBrowser_Recor
   		$form->addElement('datepicker', $field, $label, ['id' => $field]);
    		if ($mode !== 'add')
    			$form->setDefaults([$field => $default]);
-    }   
+    }
+    
+    public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+    	$critsCheck = clone $crits;
+    	
+    	$crit_value = Base_RegionalSettingsCommon::reg2time($critsCheck->getValue()->getValue(), false);
+    	
+    	$critsCheck->getValue()->setValue(date('Y-m-d', $crit_value));
+    	
+    	return parent::validate($record, $critsCheck);
+    }
 }

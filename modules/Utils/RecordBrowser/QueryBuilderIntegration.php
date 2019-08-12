@@ -153,7 +153,7 @@ class Utils_RecordBrowser_QueryBuilderIntegration
     public function get_rules($crits)
     {
         if (!is_object($crits)) {
-            $crits = \Utils_RecordBrowser_Crits::from_array($crits);
+            $crits = \Utils_RecordBrowser_Crits::create($crits);
         }
         /** @var Utils_RecordBrowser_Crits $crits */
         $ret = $this->crits_to_json($crits);

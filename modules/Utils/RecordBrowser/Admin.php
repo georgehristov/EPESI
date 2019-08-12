@@ -920,7 +920,7 @@ class Utils_RecordBrowser_Admin extends Module {
 			if (!isset($fields[$row['id']])) $fields[$row['id']] = array();
 			$action = $actions[$row['action']];
 			$crits = Utils_RecordBrowserCommon::parse_access_crits($row['crits'], true);
-            $crits_text = Utils_RecordBrowserCommon::crits_to_words($this->getTab(), $crits);
+			$crits_text = $crits->toWords($this->getRecordset());
 			foreach ($fields[$row['id']] as $k=>$v)
 				if (isset($all_fields[$v]))
 					$fields[$row['id']][$k] = $all_fields[$v];

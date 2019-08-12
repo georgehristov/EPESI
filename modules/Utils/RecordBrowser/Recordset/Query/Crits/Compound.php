@@ -4,61 +4,70 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Query_Crits_Compound extends Utils_RecordBrowser_Recordset_Query_Crits
 {
-    protected $negation = false;
-    protected $join_operator = null;
+	use Utils_RecordBrowser_Recordset_Query_Crits_Trait_Components;
 
-    /** @var Utils_RecordBrowser_CritsInterface[] $component_crits */
-    protected $component_crits = array();
-
-    public static function where($field, $operator, $value)
+    public static function where($key, $operator, $value)
     {
-        $crits_obj = new self();
-        $crits = new Utils_RecordBrowser_Recordset_Query_Crits_Single($field, $operator, $value);
-        $crits_obj->component_crits[]= $crits;
-        return $crits_obj;
+    	return self::create(Utils_RecordBrowser_Recordset_Query_Crits_Single::create($key, $value, $operator));
     }
 
+    public static function create($crits = null, $or = false)
+    {
+    	if ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits) return $crits;
+    	
+    	return new static ($crits, $or);
+    }
+    
     public function __construct($crits = null, $or = false)
     {
+    	if (is_bool($crits)) {
+    		$crits = $crits? []: Utils_RecordBrowser_Recordset_Query_Crits_RawSQL::create('false', 'true');
+     	}
+    	
         if (!$crits) return;
         
-        if (is_array($crits)) {
-            $builder = new Utils_RecordBrowser_CritsBuilder();
-            $crits = $builder->build_single($crits);
-            $this->component_crits = $crits;
-        } else {
-            $this->component_crits[] = $crits;
+        $crits = is_array($crits)? $crits: [$crits];
+        $orGroup = [];
+        foreach ($crits as $key => $value) {
+        	$modifiers = $this->parseModifiers($key);
+        	
+        	if (stripos($modifiers, '^') !== false || stripos($modifiers, '(') !== false || ($orGroup && stripos($modifiers, '|') !== false)) {
+				// strip orGroup modifier
+        		$orGroup[str_ireplace(['^', '(', '|'], '', $key)] = $value;
+				continue;
+        	}
+        	
+        	if ($orGroup) {
+        		$this->addComponent(self::create($orGroup, true));
+        		$orGroup = [];
+        	}
+
+        	if ($value instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
+        		$component = $value;
+        	}
+        	// if $key is numeric it is stripped, the value is Crits
+        	// handy when merging crits in the form of arrays
+        	elseif (!$this->stripModifiers($key)) {
+        		$component = self::create($value);
+        	}
+        	else {
+        		$component = Utils_RecordBrowser_Recordset_Query_Crits_Single::create($key, $value);
+        	}
+        	
+        	if ($component->isEmpty()) continue;
+
+        	$this->addComponent($component);
         }
-        if (is_countable($crits) && count($crits) > 1) {
-            $this->join_operator = $or ? 'OR' : 'AND';
+
+        if ($orGroup) {
+        	$this->addComponent(self::create($orGroup, true));
+        }
+        
+        if (count($crits) > 1) {
+            $this->setJunction($or ? 'OR' : 'AND');
         }
     }
     
-    public static function __set_state($array)
-    {
-    	$crits = new static();
-    	
-    	foreach ($array as $key => $value) {
-    		$crits->{$key} = $value;
-    	}
-    	
-    	return $crits;
-    }
-
-    public function normalize()
-    {
-        if ($this->get_negation()) {
-            $this->set_negation(false);
-            $this->join_operator = $this->join_operator == 'OR' ? 'AND' : 'OR';
-            foreach ($this->component_crits as $c) {
-                $c->negate();
-            }
-        }
-        foreach ($this->component_crits as $c) {
-            $c->normalize();
-        }
-    }
-
     public function find($key)
     {
         $ret = array();
@@ -81,84 +90,16 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Compound extends Utils_RecordBro
                 }
             }
         }
-        return $ret ? $ret : null;
+        return $ret ?: null;
     }
-
-    public function is_empty()
+    
+    public static function and($crits, $_ = null)
     {
-        return empty($this->component_crits);
+    	return self::create(func_get_args());
     }
-
-    public function __clone()
+    
+    public static function or($crits, $_ = null)
     {
-        foreach ($this->component_crits as $k => $v) {
-            $this->component_crits[$k] = clone $v;
-        }
-    }
-
-    protected function __op($operator, $crits)
-    {
-        $ret = $this;
-        $crits_count = count($this->component_crits);
-        if ($crits_count == 0) {
-            $this->component_crits[] = $crits;
-        } elseif ($crits_count == 1) {
-            $this->join_operator = $operator;
-            $this->component_crits[] = $crits;
-        } else {
-            if ($this->join_operator == $operator) {
-                $this->component_crits[] = $crits;
-            } else {
-                $new = new self($this);
-                $new->__op($operator, $crits);
-                $ret = $new;
-            }
-        }
-        return $ret;
-    }
-
-    public function _and($crits)
-    {
-        return $this->__op('AND', $crits);
-    }
-
-    public function _or($crits)
-    {
-        return $this->__op('OR', $crits);
-    }
-
-    /**
-     * @return null|string
-     */
-    public function get_join_operator()
-    {
-        return $this->join_operator;
-    }
-
-    /**
-     * @return Utils_RecordBrowser_CritsInterface[]
-     */
-    public function get_component_crits()
-    {
-        return $this->component_crits;
-    }
-
-    public function replace_value($search, $replace, $deactivate = false)
-    {
-        foreach ($this->component_crits as $c) {
-            $c->replace_value($search, $replace, $deactivate);
-        }
-    }
-
-    /**
-     * @param array $crits Legacy array crits
-     *
-     * @return Utils_RecordBrowser_Crits new object like crits
-     */
-    public static function from_array($crits)
-    {
-        $builder = new Utils_RecordBrowser_CritsBuilder();
-        $ret = $builder->build_from_array($crits);
-        return $ret;
-    }
+    	return self::create(func_get_args(), true);
+    }    
 }

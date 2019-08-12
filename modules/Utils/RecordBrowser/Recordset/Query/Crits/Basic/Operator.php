@@ -12,6 +12,7 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Operator
 			'<' => '<',			
 			'>' => '>',			
 	];
+	
 	protected static $opposites = [
 			'=' => '!=',
 			'!=' => '=',
@@ -90,5 +91,22 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Operator
 	
 	public function __toString() {
 		return $this->getSQL();
+	}
+	
+	public function toWords() {
+		$words = [
+				'=' => __('is equal to'),
+				'!=' => __('is not equal to'),
+				'<' => __('is smaller than'),
+				'>' => __('is greater than'),
+				'>=' => __('is greater or equal to'),
+				'<=' => __('is smaller or equal to'),
+				'LIKE' => __('is like'),
+				'NOT LIKE' => __('is not like'),
+				'IN' => 'NOT IN',
+				'NOT IN' => 'IN',
+		];
+		
+		return $words[$this->getOperator()]?? __('is equal to');
 	}
 }

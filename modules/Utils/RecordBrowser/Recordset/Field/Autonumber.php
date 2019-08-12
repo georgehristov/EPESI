@@ -3,9 +3,13 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Autonumber extends Utils_RecordBrowser_Recordset_Field {
+
+	public static function typeKey() {
+		return 'autonumber';
+	}
 	
 	public static function typeLabel() {
-		return __('Autonumber');
+		return _M('Autonumber');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {

@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Float extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'float';
+	}
+	
 	public static function typeLabel() {
-		return __('Float');
+		return _M('Float');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {

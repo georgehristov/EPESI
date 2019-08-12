@@ -4,15 +4,9 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 abstract class Utils_RecordBrowser_Recordset_Query_Crits
 {
-    protected static $replace_callbacks = array();
+    protected static $placeholderCallbacks = [];
 
-    /**
-     * Make sure that all crits do not use negation. Reverse operators and logic
-     * operators according to De Morgan's laws
-     *
-     * @return mixed
-     */
-    abstract function normalize();
+    protected $active = true;
 
     /**
      * Replace crits value to other value or disable crits that uses this value.
@@ -22,9 +16,9 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
      *
      * @param mixed $search
      * @param mixed $replace
-     * @param bool  $deactivate pass true and null as replace to disable crit
+     * @param bool  $deactivateOnNull pass true and null as replace to disable crit
      */
-    abstract function replace_value($search, $replace, $deactivate = false);
+    abstract function replaceValue($search, $replace, $deactivateOnNull = false);
 
     /**
      * Method to lookup in crits for certain fields crits or crits objects
@@ -34,117 +28,119 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
      * @return array Crits objects in array that matches $key
      */
     abstract function find($key);
+    
+    /**
+     * Validate the crit object
+     * 
+     * @param Utils_RecordBrowser_Recordset $recordset
+     * @param array $values
+     * @return array $issues
+     */
+    abstract public function validate(Utils_RecordBrowser_Recordset $recordset, $values);
+        
+    /**
+     * Negate this crit object
+     * 
+     * @return Utils_RecordBrowser_Recordset_Query_Crits $this
+     */
+    abstract public function negate();
+        
+    /**
+     * @param Utils_RecordBrowser_Recordset $recordset
+     * @return Utils_RecordBrowser_Recordset_Query
+     */
+    abstract public function getQuery(Utils_RecordBrowser_Recordset $recordset);
+    
+    /**
+     * @param string|Utils_RecordBrowser_Recordset $recordset
+     * @param boolean $html
+     */
+    abstract public function toWords($recordset, $html = true);
+    
 
-    public static function register_special_value_callback($callback)
+    public static function registerPlaceholderCallback($callback)
     {
-        self::$replace_callbacks[] = $callback;
+    	self::$placeholderCallbacks[] = $callback;
     }
 
     /**
-     * Replace all registered special values.
+     * Replace all registered placeholders
      *
      * Object will be cloned. Current object will not be changed.
      *
      * @param bool $human_readable Use special value or it's human readable form
      *
-     * @return Utils_RecordBrowser_CritsInterface New object with replaced values
+     * @return Utils_RecordBrowser_Recordset_Query_Crits New object with replaced values
      */
-    public function replace_special_values($human_readable = false)
+    public function replacePlaceholders($humanReadable = false)
     {
-        $new = clone $this;
-        $user = Base_AclCommon::get_user();
-        $replace_values = self::get_replace_values($user);
-        /** @var Utils_RecordBrowser_ReplaceValue $rv */
-        foreach ($replace_values as $rv) {
-            $replacement = $human_readable ? $rv->get_human_readable() : $rv->get_replace();
-            $deactivate = $human_readable ? false : $rv->get_deactivate();
-            $new->replace_value($rv->get_value(), $replacement, $deactivate);
+        /**
+         * @var Utils_RecordBrowser_Recordset_Query_Crits $crits
+         */
+        $crits = clone $this;
+        
+        /** @var Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder */
+        foreach ($this->getPlaceholders() as $placeholder) {
+            $crits->replaceValue($placeholder->getKey(), $placeholder->getValue($humanReadable), $placeholder->getDeactivateOnNull($humanReadable));
         }
-        return $new;
+        
+        return $crits;
     }
 
-    protected static function get_replace_values($user)
+    protected static function getPlaceholders($user = null)
     {
-        static $replace_values_cache = array();
-        if (!isset($replace_values_cache[$user])) {
-            $replace_values_cache[$user] = array();
-            foreach (self::$replace_callbacks as $callback) {
+        static $cache = [];
+        
+        $user = $user?: Acl::get_user();
+        
+        if (!isset($cache[$user])) {
+            $cache[$user] = [];
+            foreach (self::$placeholderCallbacks as $callback) {
                 $ret = call_user_func($callback);
-                if (!is_array($ret)) {
-                    $ret = array($ret);
-                }
-                /** @var Utils_RecordBrowser_ReplaceValue $rv */
-                foreach ($ret as $rv) {
-                    if (!isset($replace_values_cache[$user][$rv->get_value()])
-                        || $replace_values_cache[$user][$rv->get_value()]->get_priority() < $rv->get_priority()
+
+                /** @var Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder */
+                foreach (is_array($ret)? $ret: [$ret] as $placeholder) {
+                	$key = $placeholder->getKey();
+                	
+                	if (!isset($cache[$user][$key])	|| $cache[$user][$key]->getPriority() < $placeholder->getPriority()
                     ) {
-                        $replace_values_cache[$user][$rv->get_value()] = $rv;
+                    	$cache[$user][$key] = $placeholder;
                     }
                 }
             }
         }
-        return $replace_values_cache[$user];
+        
+        return $cache[$user];
     }
-
-    /**
-     * @return boolean
-     */
-    public function get_negation()
-    {
-        return $this->negation;
-    }
-
-    /**
-     * @param boolean $negation
-     */
-    public function set_negation($negation = true)
-    {
-        $this->negation = $negation;
-    }
-
-    /**
-     * Negate this crit object
-     */
-    public function negate()
-    {
-        $this->set_negation(!$this->get_negation());
-    }
-
+        
     /**
      * @param bool $active
      */
-    public function set_active($active = true)
+    public function setActive($active = true)
     {
         $this->active = ($active == true);
+        
+        return $this;
     }
 
     /**
      * @return bool
      */
-    public function is_active()
+    public function isActive()
     {
         return $this->active;
     }
-
-    protected $negation = false;
-    protected $active = true;
-        
-    public static function opposite_operator($operator)
-    {
-    	switch ($operator) {
-    		case '=' : return '!=';
-    		case '!=': return '=';
-    		case '>=': return '<';
-    		case '<' : return '>=';
-    		case '<=': return '>';
-    		case '>': return '<=';
-    		case 'LIKE': return 'NOT LIKE';
-    		case 'NOT LIKE': return 'LIKE';
-    		case 'IN': return 'NOT IN';
-    		case 'NOT IN': return 'IN';
-    	}
-    }
     
+    public function isCompound()
+    {
+        return false;
+    }
+            
+    public function isEmpty()
+    {
+        return false;
+    }
+            
     public static function stripModifiers($key)
     {
     	return substr($key, strlen(self::parseModifiers($key)));
@@ -152,8 +148,19 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     
     public static function parseModifiers($key)
     {
-    	$result = preg_split( '/[a-zA-Z:_]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
+    	$result = preg_split( '/[a-zA-Z:_\[\]]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
     	
     	return $result? reset($result): '';
+    }
+    
+    public static function __set_state($array)
+    {
+    	$crits = new static();
+    	
+    	foreach ($array as $key => $value) {
+    		$crits->{$key} = $value;
+    	}
+    	
+    	return $crits;
     }
 }

@@ -52,4 +52,41 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value
 	public function __toString() {
 		return $this->getSQL();
 	}
+	
+	public function replace($search, $replace) {
+		if ($this->isRawSql()) return false;
+		
+		if ($match = $this->getValue() === $search) {
+			$this->setValue($replace);
+		}
+		
+		return $match;
+	}
+
+	public function toWords(Utils_RecordBrowser_Recordset_Field $field, $html = true) {
+		if ($this->getCallback()) return '';
+		
+		$value = $this->getValue();
+
+		$ret = '';
+		if (is_bool($value)) {
+			$ret = $value ? __('true') : __('false');
+		} elseif ($value === '' || $value === null) {
+			$ret = __('empty');
+		} else {
+			$ret = Utils_RecordBrowserCommon::get_val($field->getTab(), $field->getId(), [$field->getId() => $value], true)?: $value;
+		}
+		
+		return $ret;
+	}
+	
+	public function getCallback() {
+		$value = explode('::', $this->getValue(), 3);
+		
+		if ($value[0] != '__CALLBACK__') return;
+		
+		array_shift($value);
+		
+		return $value;
+	}
 }

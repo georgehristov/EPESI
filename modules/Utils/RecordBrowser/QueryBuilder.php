@@ -66,8 +66,8 @@ class Utils_RecordBrowser_QueryBuilder
             }
             return array($sql_str, $vals);
         } elseif ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits_RawSQL) {
-            $sql = $crits->get_negation() ? $crits->get_negation_sql() : $crits->get_sql();
-            return array($sql, $crits->get_vals());
+            $sql = $crits->get_negation() ? $crits->getNegationSql() : $crits->getSql();
+            return array($sql, $crits->getValues());
         }
         return array('', array());
     }
@@ -570,7 +570,7 @@ class Utils_RecordBrowser_QueryBuilder
                     $crits->_or(new Utils_RecordBrowser_CritsSingle($col, $operator, $value, false, $raw_sql_val));
                 }
             }
-            if (!$crits->is_empty()) {
+            if (!$crits->isEmpty()) {
                 $subquery = Utils_RecordBrowserCommon::build_query($tab2, $crits, $this->admin_mode);
                 if ($subquery) {
                     $ids = DB::GetCol("SELECT r.id FROM $subquery[sql]", $subquery['vals']);

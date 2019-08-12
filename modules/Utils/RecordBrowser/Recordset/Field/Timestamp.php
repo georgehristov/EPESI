@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Timestamp extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'timestamp';
+	}
+	
 	public static function typeLabel() {
-		return __('Timestamp');
+		return _M('Timestamp');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -73,5 +77,15 @@ class Utils_RecordBrowser_Recordset_Field_Timestamp extends Utils_RecordBrowser_
 		if ($mode !== 'add' && $default) $form->setDefaults(array(
 				$field => $default
 		));
-	}   
+	}
+	
+	public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+		$critsCheck = clone $crits;
+		
+		$crit_value = Base_RegionalSettingsCommon::reg2time($critsCheck->getValue()->getValue(), false);
+		
+		$critsCheck->getValue()->setValue(date('Y-m-d H:i:s', $crit_value));
+		
+		return parent::validate($record, $critsCheck);
+	}
 }

@@ -80,8 +80,8 @@ class Utils_RecordBrowser_Recordset_Query_Crits_ToWords
 
     protected function build_raw_sql_crits_to_words(Utils_RecordBrowser_CritsRawSQL $crits)
     {
-        $sql = $crits->get_negation() ? $crits->get_negation_sql() : $crits->get_sql();
-        $value = implode(', ', $crits->get_vals());
+        $sql = $crits->get_negation() ? $crits->getNegationSql() : $crits->getSql();
+        $value = implode(', ', $crits->getValues());
         $ret = __('Raw SQL') . ': ' . "'{$sql}'" . __('with values') . ': ' . "({$value})";
         return array('str' => $ret, 'multiple' => true);
     }

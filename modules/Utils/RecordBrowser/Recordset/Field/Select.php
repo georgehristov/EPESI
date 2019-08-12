@@ -8,8 +8,12 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 	protected $single_tab = false;
 	protected $record_count = 0;
 	
+	public static function typeKey() {
+		return 'select';
+	}
+	
 	public static function typeLabel() {
-		return __('Select');
+		return _M('Select');
 	}
 	
 	public static function paramElements() {
@@ -271,16 +275,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		return ' ' . $val . ' ' . $direction;
 	}
 	
-	public function handleCrits($field, $operator, $value) {
-		return $this->handleCritsSelect($field, $operator, $value);
-	}
-	
-	
-	public function handleCritsRawSql($field, $operator, $value, $rawSql) {
-		return $this->handleCritsSelect($field, $operator, $value, $rawSql);
-	}
-	
-	protected function handleCritsSelect($field, $operator, $value, $rawSql = false) {
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
 		$param = $this->getParam();
 		
 		$sql = '';
@@ -291,7 +286,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		
 		$tab2 = $param['single_tab'];
 		
-		if ($operator == DB::like() && isset($param['cols'])) {
+		if ($crit->getOperator()->getOperator() == DB::like() && isset($param['cols'])) {
 			$sub_field = implode('|', $param['cols']);
 		}
 		
@@ -331,7 +326,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 					$crits->_or(new Utils_RecordBrowser_CritsSingle($col, $operator, $value, false, $rawSql));
 				}
 			}
-			if (!$crits->is_empty()) {
+			if (!$crits->isEmpty()) {
 				$subquery = Utils_RecordBrowserCommon::build_query($tab2, $crits, $this->admin_mode);
 				if ($subquery) {
 					$ids = DB::GetCol("SELECT r.id FROM $subquery[sql]", $subquery['vals']);
@@ -518,5 +513,34 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		if ($mode !== 'add') $form->setDefaults(array(
 				$field => $default
 		));
-	}   
+	} 
+	
+	public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+		$values = $this->decodeValue($record[$this->getId()] ?? '', false);
+
+		if ($subfield = $crits->getKey()->getSubfield()) {
+			if ($tab2 = $this->getParam('single_tab')) {
+				$checkCrits = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($subfield, $crits->getValue(), $crits->getOperator());
+
+				foreach (is_array($values)? $values: [$values] as $value) {
+					$issues = Utils_RecordBrowser_Recordset::create($tab2)->getRecord($value)->validate($checkCrits);
+					
+					if (!$issues) return true;
+				}
+				
+				return false;
+			}
+		}
+
+		$critsCheck = clone $crits;
+		
+		// remove prefix for select from single tab: contact/1 => 1
+		if (preg_match('/^[0-9-]+$/', is_array($values)? reset($values): $values)) {
+			$crit_value = preg_replace('#.*/#', '', $critsCheck->getValue()->getValue());
+			
+			$critsCheck->getValue()->setValue($crit_value);
+		}
+		
+		return parent::validate($record, $critsCheck);
+	}
 }

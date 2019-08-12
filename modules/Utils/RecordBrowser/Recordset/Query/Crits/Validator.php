@@ -151,7 +151,7 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Validator
 
     protected function validate_compound(Utils_RecordBrowser_Crits $crits, $record)
     {
-        if ($crits->is_empty()) {
+        if ($crits->isEmpty()) {
             return array(true, array());
         }
         $or = $crits->get_join_operator() == 'OR';
@@ -183,7 +183,7 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Validator
 
     protected function validate_sql(Utils_RecordBrowser_CritsRawSQL $crits, $record)
     {
-        $sql = $crits->get_negation() ? $crits->get_negation_sql() : $crits->get_sql();
+        $sql = $crits->get_negation() ? $crits->getNegationSql() : $crits->getSql();
         if ($sql) {
             $sql = "AND $sql";
         }

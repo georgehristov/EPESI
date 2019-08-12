@@ -2,167 +2,54 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-interface Utils_RecordBrowser_Recordset_Field_Interface {
-	public function getId();
-	
-	public function getName();
-	
-	public function getActive();
-	
-	public function getActualDbType();
-	
-	public function isRequiredPossible();
-	
-	public function isEmpty($record);
-	
-	public function isVisible();
-	
-	public function isRequired();
-		
-	public static function decodeValue($value, $htmlspecialchars = true);
-	
-	public static function encodeValue($value);
-	
-	public static function decodeParam($param);
-	
-	public static function encodeParam($param);	
-	
-	public function defaultValue();
-	
-	public function prepareSqlValue(& $value);
-	
-	public function processAddedValue($value, $record);
-	
-	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj);
-	
-	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null);
-	
-	public function getSqlId($tabAlias='');
-	
-	public function getSqlType();
-	
-	public function getSqlOrder($direction, $tabAlias='');
-	
-	/**
-	 * @param string $operator
-	 * @param string|array $value
-	 * @param string $tabAlias
-	 * 
-	 * @return array $sql, $vals
-	 */
-	public function handleCrits($operator, $value, $tabAlias='');
-	
-	/**
-	 * @param string $operator
-	 * @param string|array $value
-	 * @param string $tabAlias
-	 *
-	 * @return array $sql, $vals
-	 */
-	public function handleCritsRawSql($operator, $value, $tabAlias='');
-}
-
-class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
+class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAccess, Countable {
 	/**
 	 * @var Utils_RecordBrowser_Recordset
 	 */
 	protected $recordset;
 	protected $formElement = null;
+	protected $desc = [];
 	protected static $registry = [];
+	protected static $special = [];
 	
-	public static function typeLabel() {
+	public static function typeKey() {
 		return static::class;
 	}
 	
-	public function __construct($desc = null) {
-		$descDefault = [
-				'name' => null,
-				'field' => null,
-				'id' => null,
-				'caption' => null,
-				'pkey' => null,
-				'type' => null,
-				'visible' => null,
-				'required' => null,
-				'extra' => null,
-				'active' => null,
-				'export' => null,
-				'tooltip' => null,
-				'position' => null,
-				'processing_order' => null,
-				'filter' => null,
-				'style' => null,
-				'param' => null,
-				'help' => null,
-				'template' => null,
-				'display_callback' => null,
-				'QFfield_callback' => null,
-				'tab' => null,
-				//---> deprecated - backward compatibility
-				'ref_table' => null,
-				'ref_field' => null,
-				'commondata' => false,
-				'commondata_array' => null,
-				'commondata_order' => null,
-				//<--- deprecated
-		];
-
-		$desc = array_intersect_key(array_merge($descDefault, $desc), $descDefault);
-			
-		parent::__construct($desc, self::ARRAY_AS_PROPS);
-		
-		$this->param = $this->decodeParam($this->param);
-		
-		if (!$this->isRequiredPossible())
-			$this->setRequired(false);
+	public static function typeLabel() {
+		return false;
 	}
 	
 	/**
-	 * @param string Utils_RecordBrowser_Recordset
+	 * @param string|Utils_RecordBrowser_Recordset
 	 * @param string|array $name_or_desc
 	 * @param boolean $admin
-	 * @return Utils_RecordBrowser_Recordset_Field_Interface
+	 * @return Utils_RecordBrowser_Recordset_Field
 	 */
-	public static function create(Utils_RecordBrowser_Recordset $recordset, $name_or_desc, $admin = false) {
-		$desc = is_string($name_or_desc)? self::getDesc($recordset->getTab(), $name_or_desc): $name_or_desc;
+	public static function create($recordset, $name_or_desc = null, $admin = false) {
+		$recordset = Utils_RecordBrowser_Recordset::create($recordset);
+		
+		$desc = !is_array($name_or_desc)? static::desc($recordset->getTab(), $name_or_desc): $name_or_desc;
 		
 		if (!$desc) return [];
 		
 		$desc = self::resolveDesc($desc);
-
+		
 		if (!$class = self::resolveClass($desc)) return [];
 
-		/**
-		 * @var Utils_RecordBrowser_Recordset_Field $field
-		 */
-		$field = new $class($desc);
-		
-		return $field->setRecordset($recordset);
+		return new $class($recordset, $desc);
 	}
 	
-	public static function getDesc($tab, $fieldName, $admin = false) {
-		return DB::GetRow("SELECT * FROM {$tab}_field  WHERE " . ($admin?'':' active=1 AND ') . 'field=%s', $admin?[]:[$fieldName]);
-	}
-	
-	/**
-	 * @param array $desc
-	 * @return array
-	 */
-	public static function resolveDesc($desc) {
-		foreach (array_keys($desc) as $id)
-			if (is_numeric($id)) unset($desc[$id]);
+	public function __construct($recordset, $desc = null) {
+		$this->setRecordset($recordset);
 
-		$desc['pkey'] = self::getFieldId($desc['id']);
-		$desc['id'] = self::getFieldId($desc['field']);
-		$desc['name'] = str_replace('%', '%%', $desc['caption']?: $desc['field']);
+		$this->setDesc($desc);
+	}
 		
-		return self::resolveDescBackwardsCompatible($desc);
+	public static function resolveClass($desc) {
+		return self::$registry[$desc['type']]?? (self::$special[$desc['type']]?? static::class);
 	}
 	
-	public static function resolveClass($desc) {
-		return self::$registry[$desc['type']]?? null;
-	}
-		
 	public static function getRegistrySelectList() {
 		$ret = [];
 		
@@ -170,13 +57,28 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 			$ret[$type] = $class::typeLabel();
 		}
 		
-		return $ret;
+		return array_filter($ret);
 	}
 		
 	public static function paramElements() {
 		return [];
 	}
 		
+	/**
+	 * @param array $desc
+	 * @return array
+	 */
+	public static function resolveDesc($desc) {
+		foreach (array_keys($desc) as $id)
+			if (is_numeric($id)) unset($desc[$id]);
+			
+		$desc['pkey'] = self::getFieldId($desc['id']);
+		$desc['id'] = self::getFieldId($desc['field']);
+		$desc['name'] = str_replace('%', '%%', $desc['caption']?: $desc['field']);
+			
+		return self::resolveDescBackwardsCompatible($desc);
+	}
+	
 	/**
 	 * @param array $desc
 	 * @return array
@@ -218,21 +120,31 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return array_merge($desc, $ret);
 	}
 		
-	public static final function register($type_or_list, $class = null) {
-		if (!is_array($type_or_list)) {
-			if (!$class) trigger_error("Attempting to register field $type_or_list without associated class", E_USER_ERROR);
-			
-			$type_or_list = [$type_or_list => $class];
-		}
+	public static final function register($type_or_list = null) {
+		$type_or_list = $type_or_list?: static::class;
 		
-		array_map(function($class) {
-			if (!is_a($class, Utils_RecordBrowser_Recordset_Field::class, true))
+		foreach (is_array($type_or_list)? $type_or_list: [$type_or_list] as $class) {
+			if (!is_a($class, Utils_RecordBrowser_Recordset_Field::class, true)) {
 				trigger_error("Attempting to register field $class that is not descendent of Utils_RecordBrowser_Recordset_Field", E_USER_ERROR);
-		}, $type_or_list);
-		
-		self::$registry = array_merge(self::$registry, $type_or_list);
+			}
+			
+			$entry = [
+					$class::typeKey() => $class
+			];
+			
+			if ($class::typeLabel()) {
+				self::$registry = array_merge(self::$registry, $entry);
+			}
+			else {
+				self::$special = array_merge(self::$special, $entry);
+			}			
+		}
 	}
-		
+	
+	public static final function getSpecial() {
+		return self::$special;
+	}
+	
 	public final function isVisible() {
 		return $this->visible;
 	}
@@ -280,6 +192,15 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 	public function getQueryId() {
 		return implode('.', array_filter([$this->getRecordset()->getTabAlias(), $this->getSqlId()]));
 	}
+		
+	/**
+	 * The id to use when assigning value in the record array
+	 *
+	 * @return string
+	 */
+	public function getArrayId() {
+		return $this->getId();
+	}	
 	
 	public function getSqlId() {
 		return 'f_' . $this->getId();
@@ -297,11 +218,11 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return $this->getTooltip('<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>');
 	}
 	
-	public static function decodeValue($value, $htmlspecialchars = true) {
+	public static function decodeValue($value, $options = []) {
 		return $value;
 	}
 	
-	public static function encodeValue($value) {
+	public static function encodeValue($value, $options = []) {
 		return $value;
 	}
 	
@@ -317,7 +238,7 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return '';
 	}
 	
-	public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
 	{
 		if ($crit->getValue()->isRawSql()) {
 			return $this->getRawSQLQuerySection($crit);
@@ -339,14 +260,14 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 			$vals[] = $value;
 		}
 		
-		return Utils_RecordBrowser_Recordset_Query_Section::create($sql, $vals);
+		return $this->getRecordset()->createQuery($sql, $vals);
 	}
 	
 	public function getRawSQLQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
 		$operator = $crit->getSQLOperator();
 		$value = $crit->getSQLValue();
 		
-		return Utils_RecordBrowser_Recordset_Query_Section::create($this->getQueryId() . " $operator $value");
+		return $this->getRecordset()->createQuery($this->getQueryId() . " $operator $value");
 	}
 	
 	public final function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj) {
@@ -369,6 +290,39 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 				}
 			}
 		}
+	}
+	
+	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+		$value = $this->decodeValue($values[$this->getId()] ?? '', false);
+		$crit_value = $crits->getValue()->getValue();
+		
+		$result = false;
+		if (is_array($value)) {
+			$result = $crit_value? in_array($crit_value, $value): empty($value);
+
+			if ($crits->getOperator()->getOperator() == '!=') $result = !$result;
+		}
+		else switch ($crits->getOperator()->getOperator()) {
+			case '>': $result = ($value > $crit_value); break;
+			case '>=': $result = ($value >= $crit_value); break;
+			case '<': $result = ($value < $crit_value); break;
+			case '<=': $result = ($value <= $crit_value); break;
+			case '!=': $result = ($value != $crit_value); break;
+			case '=': $result = ($value == $crit_value); break;
+			case 'LIKE': $result = $this->checkLikeMatch($value, $crit_value); break;
+			case 'NOT LIKE': $result = !$this->checkLikeMatch($value, $crit_value); break;
+		}
+
+		return $result;
+	}
+	
+	protected final static function checkLikeMatch($value, $pattern, $ignoreCase = true)
+	{
+		$pattern = preg_quote($pattern);
+		$pattern = str_replace(['_', '%', '/'], ['.', '.*', '\/'], $pattern);
+		$pattern = "/^$pattern\$/" . ($ignoreCase ? "i" : "");
+		
+		return preg_match($pattern, $value) > 0;
 	}
 	
 	public function isEmpty($record) {
@@ -398,11 +352,16 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return false;
 	}
 	
+	/**
+	 * @param Utils_RecordBrowser_Recordset_Record $record
+	 * @param boolean $nolink
+	 * @return string
+	 *  */
 	public final function display($record, $nolink=false) {
 		static $recurrence = [];
-		
-		if(!array_key_exists('id', $record)) $record['id'] = null;
-		if (!array_key_exists($this['id'], $record)) trigger_error($this['id'].' - unknown field for record '.serialize($record), E_USER_ERROR);
+
+		if(!isset($record['id'])) $record['id'] = null;
+		if (!isset($record[$this['id']])) trigger_error($this['id'].' - unknown field for record '.print_r($record->toArray(), true), E_USER_ERROR);
 		
 		$val = $record[$this['id']];
 		
@@ -500,8 +459,8 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return $this->style;
 	}
 	
-	public function getParam() {
-		return $this->param;
+	public function getParam($key = null) {
+		return $key? ($this->param[$key]?? null): $this->param;
 	}
 	
 	public function getHelp() {
@@ -648,21 +607,49 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return $this;
 	}
 	
-	public function defaultValue() {
+	public function defaultValue($mode) {
 		return '';
+	}
+	
+	public function process($values, $mode, $options = []) {
+		$callback = [$this, 'process' . ucfirst($mode)];
+
+		return is_callable($callback)? call_user_func($callback, $values, $options): $values;
 	}
 	
 	/**
 	 * Prepare the field value for saving to the database
 	 * Return true if value should be included for inserting and false otherwise
 	 */
-	public function prepareSqlValue(& $value) {
-		$value = $this->encodeValue($value);
-		return is_bool($value)? ($value? 1: 0): $value;
+	public function processAdd($values, $options = []) {
+		$value = $this->encodeValue($values[$this->getId()]);
+		
+		$values[$this->getId()] =  is_bool($value)? ($value? 1: 0): $value;
+		
+		return $values;
 	}
 	
-	public function processAddedValue($value, $record) {
-		return $this->decodeValue($value);
+	public function processAdded($values, $options = []) {
+		$values[$this->getId()] =  $this->decodeValue($values[$this->getId()], $options);
+		
+		return $values;
+	}
+	
+	/**
+	 * Process values retrieved from database
+	 * $values has sqlId keys
+	 * 
+	 * @param array $values
+	 * @return array
+	 */
+	public function processGet($values, $options = []) {
+		$sqlId = $this->getSqlId();
+
+		$value = $sqlId && isset($values[$sqlId])? $values[$sqlId]: $this->defaultValue('view');
+				
+		return [
+				$this->getArrayId() => $this->decodeValue($value, $options)
+		];	
 	}
 	
 	public function getFormElement() {
@@ -673,13 +660,89 @@ class Utils_RecordBrowser_Recordset_Field extends ArrayObject {
 		return $this->recordset;
 	}
 
-	public function setRecordset($recordset) {
-		$this->recordset = $recordset;
+	protected function setRecordset($recordset) {
+		$this->recordset = Utils_RecordBrowser_Recordset::create($recordset);
 		
 		return $this;
 	}
+	
+	protected function setDesc($desc) {
+		$desc = is_string($desc)? $this->desc($this->getRecordset()->getTab(), $desc): $desc;
 
+		$descDefault = [
+				'name' => null,
+				'field' => null,
+				'id' => null,
+				'caption' => null,
+				'pkey' => null,
+				'type' => null,
+				'visible' => null,
+				'required' => null,
+				'extra' => null,
+				'active' => null,
+				'export' => null,
+				'tooltip' => null,
+				'position' => null,
+				'processing_order' => null,
+				'filter' => null,
+				'style' => null,
+				'param' => null,
+				'help' => null,
+				'template' => null,
+				'display_callback' => null,
+				'QFfield_callback' => null,
+				'tab' => null,
+				//---> deprecated - backward compatibility
+				'ref_table' => null,
+				'ref_field' => null,
+				'commondata' => false,
+				'commondata_array' => null,
+				'commondata_order' => null,
+				//<--- deprecated
+		];
+		
+		$desc = array_intersect_key(array_merge($descDefault,$this->resolveDesc($desc)), $descDefault);
+		
+		$desc['param'] = $this->decodeParam($desc['param']);
+				
+		if (!$this->isRequiredPossible())
+			$desc['required'] = false;
+		
+		$this->desc = $desc;
+		
+		return $this;
+	}
+	
+	public static function desc($tab = null, $name = null) {
+		return $tab && $name? DB::GetRow("SELECT * FROM {$tab}_field  WHERE field=%s", [$name]): [];
+	}
+	
+	// Interface methods
+	public function count() {
+		return count($this->desc);
+	}
+	
+	public function offsetExists($offset) {
+		return array_key_exists($offset, $this->desc);
+	}
+	
+	public function offsetGet($offset) {
+		return $this->desc[$offset]?? null;
+	}
+	
+	public function offsetSet($offset, $value) {
+		$this->desc[$offset] = $value;
+	}
+	
+	public function offsetUnset($offset) {
+		unset($this->desc[$offset]);
+	}
+	
+	public function getIterator() {
+		return new ArrayIterator($this->desc);
+	}
+	
+	public function __get($property) { 
+		return $this[$property]?? null; 
+	}
 }
-
-
-

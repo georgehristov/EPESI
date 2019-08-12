@@ -5,8 +5,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBrowser_Recordset_Field_CommonData {
 	protected $multiselect = true;
 
+	public static function typeKey() {
+		return 'multicommondata';
+	}
+	
 	public static function typeLabel() {
-		return __('Multi Commondata');
+		return _M('Multi Commondata');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -47,15 +51,15 @@ class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBr
 	    return $ret?: ' ' . $field_sql_id . ' ' . $direction; // key or if position or value failed
     }    
 
-    public function defaultValue() {
+    public function defaultValue($mode) {
     	return [];
     }
     
-    public static function decodeValue($value, $htmlspecialchars = true) {
+    public static function decodeValue($value, $options = []) {
     	return Utils_RecordBrowserCommon::decode_multi($value);
     }
         
-    public static function encodeValue($value) {
+    public static function encodeValue($value, $options = []) {
     	return Utils_RecordBrowserCommon::encode_multi($value);
     }
     

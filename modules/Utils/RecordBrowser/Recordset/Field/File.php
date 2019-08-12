@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_File extends Utils_RecordBrowser_Recordset_Field_MultiSelect {
 	
+	public static function typeKey() {
+		return 'file';
+	}
+	
 	public static function typeLabel() {
-		return __('File');
+		return _M('File');
 	}
 	
 	public function processAdd($values) {

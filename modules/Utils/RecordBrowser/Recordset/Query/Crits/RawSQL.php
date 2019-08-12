@@ -5,93 +5,85 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 class Utils_RecordBrowser_Recordset_Query_Crits_RawSQL extends Utils_RecordBrowser_Recordset_Query_Crits
 {
     protected $sql;
-    protected $negation_sql;
-    protected $vals;
+    protected $negationSql;
+    protected $values;
 
-    function __construct($sql, $negation_sql = false, $values = array())
+    public static function create($sql, $negationSql = false, $values = [])
     {
-        $this->sql = $sql;
-        $this->negation_sql = $negation_sql;
-        if (!is_array($values)) {
-            $values = array($values);
-        }
-        $this->vals = $values;
+        return new static ($sql, $negationSql, $values);
     }
     
-    public static function __set_state($array)
+    public function __construct($sql, $negationSql = false, $values = [])
     {
-    	$crits = new static();
+        $this->sql = $sql;
+        $this->negationSql = $negationSql;
+        $this->values = is_array($values)? $values: [$values];
+    }
+    
+    public function validate(Utils_RecordBrowser_Recordset $recordset, $values)
+    {
+    	if (!$this->isActive()) return [];
     	
-    	foreach ($array as $key => $value) {
-    		$crits->{$key} = $value;
+    	if ($sql = $this->getSql()) {
+    		$sql = "AND $sql";
     	}
+    	$ret = DB::GetOne("SELECT 1 FROM {$recordset->getTab()}_data_1 WHERE id=%d $sql", [$values['id']?? 0]);
     	
-    	return $crits;
+    	return $ret? []: [$this];
+    }
+    
+    public function negate()
+    {
+        if ($this->negationSql === false)
+       		throw new ErrorException('Cannot negate RawSQL crits without negationSql param!');
+
+        $sql = $this->negationSql;
+        $this->negationSql = $this->sql;
+        $this->sql = $sql;
+        
+        return $this;
     }
 
+    public function toWords($recordset, $html = true)
+    {
+    	$sql = $this->get_negation() ? $this->getNegationSql() : $this->getSql();
+    	$value = implode(', ', $this->getValues());
+    	
+    	return __('Raw SQL') . ': ' . "'{$sql}'" . __('with values') . ': ' . "({$value})";
+    }
+       
+    public function getQuery(Utils_RecordBrowser_Recordset $recordset)
+    {
+    	return $recordset->createQuery($this->getSql(), $this->getValues());
+    }
+        
     /**
      * @return mixed
      */
-    public function get_sql()
+    public function getSql()
     {
-        return $this->sql;
+    	return $this->sql;
     }
-
+    
     /**
      * @return boolean
      */
-    public function get_negation_sql()
+    public function getNegationSql()
     {
-        return $this->negation_sql;
+    	return $this->negationSql;
     }
-
+    
     /**
      * @return array
      */
-    public function get_vals()
+    public function getValues()
     {
-        return $this->vals;
+    	return $this->values;
     }
-
-    public function normalize()
-    {
-        if (!$this->get_negation()) return;
-        
-       	if ($this->negation_sql === false)
-       		throw new ErrorException('Cannot normalize RawSQL crits without negation_sql param!');
-            
-        $this->set_negation(false);
-        $tmp_sql = $this->negation_sql;
-        $this->negation_sql = $this->sql;
-        $this->sql = $tmp_sql;
-    }
-
-    public function replace_value($search, $replace, $deactivate = false)
-    {
-        $deactivate = $deactivate && ($replace === null);
-        if (is_array($this->vals)) {
-            foreach ($this->vals as $k => $v) {
-                if ($v === $search) {
-                    if ($deactivate) {
-                        $this->set_active(false);
-                    } else {
-                        $this->vals[$k] = $replace;
-                    }
-                }
-            }
-        } elseif ($this->vals === $search) {
-            if ($deactivate) {
-                $this->set_active(false);
-            } else {
-                $this->vals = $replace;
-            }
-        }
-    }
-
-    public function find($key)
-    {
-
-    }
-
+    
+    
+    public function replaceValue($search, $replace, $deactivateOnNull = false) {}
+    
+    public function find($key) {}
 }
 

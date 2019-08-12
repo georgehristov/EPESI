@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'text';
+	}
+	
 	public static function typeLabel() {
-		return __('Text');
+		return _M('Text');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -14,8 +18,12 @@ class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recor
 		]);
 	}
 	  
-    public static function decodeValue($value, $htmlspecialchars = true) {
-    	return $htmlspecialchars? htmlspecialchars($value): $value;
+	public static function decodeValue($value, $options = []) {
+		$options = array_merge([
+				'htmlspecialchars' => true
+		], $options);
+		
+		return $options['htmlspecialchars']? htmlspecialchars($value): $value;
     }
     
     public function getAjaxTooltipOpts() {
@@ -44,5 +52,25 @@ class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recor
     	$form->addRule($field, __('Maximum length for this field is %s characters.', [$maxlength]), 'maxlength', $maxlength);
     	if ($mode !== 'add')
     		$form->setDefaults([$field => $default]);
-    }   
+    } 
+    
+    public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+    	$value = $this->decodeValue($record[$this->getId()] ?? '', false);
+    	$crit_value = $crits->getValue()->getValue();
+    	
+    	$result = false;
+    	$str_cmp = strcasecmp($value, $crit_value);
+    	switch ($crits->getOperator()->getOperator()) {
+    		case '>': $result = ($str_cmp > 0); break;
+    		case '>=': $result = ($str_cmp >= 0); break;
+    		case '<': $result = ($str_cmp < 0); break;
+    		case '<=': $result = ($str_cmp <= 0); break;
+    		case '!=': $result = ($str_cmp != 0); break;
+    		case '=': $result = ($str_cmp == 0); break;
+    		case 'LIKE': $result = $this->checkLikeMatch($value, $crit_value); break;
+    		case 'NOT LIKE': $result = !$this->checkLikeMatch($value, $crit_value); break;
+    	}
+    	
+    	return $result;
+    }
 }

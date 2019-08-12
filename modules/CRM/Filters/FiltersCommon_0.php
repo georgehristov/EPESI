@@ -91,10 +91,10 @@ class CRM_FiltersCommon extends ModuleCommon {
 			}
 		}
 
-		return new Utils_RecordBrowser_ReplaceValue('__PERSPECTIVE__', __('Perspective'), $perspective, true);
+		return Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create('__PERSPECTIVE__', __('Perspective'), $perspective, true);
 	}
 }
 
-Utils_RecordBrowser_Crits::register_special_value_callback(array('CRM_FiltersCommon', 'crits_special_values'));
+Utils_RecordBrowser_Crits::registerPlaceholderCallback(['CRM_FiltersCommon', 'crits_special_values']);
 
 ?>

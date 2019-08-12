@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Integer extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'integer';
+	}
+	
 	public static function typeLabel() {
-		return __('Integer');
+		return _M('Integer');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -14,23 +18,31 @@ class Utils_RecordBrowser_Recordset_Field_Integer extends Utils_RecordBrowser_Re
 		]);
 	}
 	
-    public function handleCrits($field, $operator, $value) {
-    	$field = $this->getQueryId();
-    	
-    	if ($operator == DB::like()) {
-            if (DB::is_postgresql()) $field .= '::varchar';
-            return array("$field $operator %s", array($value));
-        }
-        $vals = array();
-        if ($value === '' || $value === null || $value === false) {
-            $sql = "$field IS NULL";
-        } else {
-            $sql = "$field $operator %d AND $field IS NOT NULL";
-            $vals[] = $value;
-        }
-        return array($sql, $vals);
-    }
-    
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+		
+		$field = $this->getQueryId();
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+		
+		if ($operator == DB::like()) {
+			if (DB::is_postgresql()) $field .= '::varchar';
+			return $this->getRecordset()->createQuery("$field $operator %s", [$value]);
+		}
+		$vals = [];
+		if ($value === '' || $value === null || $value === false) {
+			$sql = "$field IS NULL";
+		} else {
+			$sql = "$field $operator %d AND $field IS NOT NULL";
+			$vals[] = $value;
+		}
+
+		return $this->getRecordset()->createQuery($sql, $vals);
+	}
+	
     public static function getAjaxTooltip($opts) {
     	return __('Enter a numeric value in the text field');
     }

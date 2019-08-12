@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'calculated';
+	}
+	
 	public static function typeLabel() {
-		return __('Calculated');
+		return _M('Calculated');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -44,8 +48,12 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
     	return ' ' . $val . ' ' . $direction;
     }
     
-    public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Single $crit) {
-    	if (!$this->getParam()) return Utils_RecordBrowser_Recordset_Query_Section::create('false');
+    public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
+    	if (!$this->getParam()) return $this->getRecordset()->createQuery('false');
+    	
+    	if ($crit->getValue()->isRawSql()) {
+    		return $this->getRawSQLQuerySection($crit);
+    	}
     	
     	$field = $this->getQueryId();
     	$operator = $crit->getSqlOperator();
@@ -60,14 +68,8 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
             $vals[] = $value;
         }
         
-        return Utils_RecordBrowser_Recordset_Query_Section::create($sql, $vals);
+        return $this->getRecordset()->createQuery($sql, $vals);
     }
-    
-    public function handleCritsRawSql($field, $operator, $value) {
-    	if (!$this->getParam()) return ['false', []];
-    	
-    	return [$this->getQueryId() . " $operator $value", []];
-    }   
     
     public static function getAjaxTooltip($opts) {
     	return __('This field is not editable');

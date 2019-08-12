@@ -1359,13 +1359,14 @@ class CRM_ContactsCommon extends ModuleCommon {
 
     public static function crits_special_values()
     {
-        $ret = array();
         $me = self::get_my_record();
-        $my_contact_id = $me['id'] ? $me['id'] : -1;
+        $my_contact_id = $me['id'] ?: -1;
         $my_company_id = (isset($me['company_name']) && $me['company_name']) ? $me['company_name'] : -1;
-        $ret[] = new Utils_RecordBrowser_ReplaceValue('USER', __('User Contact'), "contact/$my_contact_id");
-        $ret[] = new Utils_RecordBrowser_ReplaceValue('USER_COMPANY', __('User Company'), "company/$my_company_id");
-        return $ret;
+
+        return [
+        		Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create('USER', __('User Contact'), "contact/$my_contact_id"),
+        		Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create('USER_COMPANY', __('User Company'), "company/$my_company_id"),
+        ];
     }
 
     //////////////////////////
@@ -1397,6 +1398,6 @@ class CRM_ContactsCommon extends ModuleCommon {
     }
 }
 
-Utils_RecordBrowser_Crits::register_special_value_callback(array('CRM_ContactsCommon', 'crits_special_values'));
+Utils_RecordBrowser_Crits::registerPlaceholderCallback(['CRM_ContactsCommon', 'crits_special_values']);
 
 ?>

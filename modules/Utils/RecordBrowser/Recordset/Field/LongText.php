@@ -2,10 +2,14 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_Recordset_Field_LongText extends Utils_RecordBrowser_Recordset_Field {
+class Utils_RecordBrowser_Recordset_Field_LongText extends Utils_RecordBrowser_Recordset_Field_Text {
+	
+	public static function typeKey() {
+		return 'long text';
+	}
 	
 	public static function typeLabel() {
-		return __('Long Text');
+		return _M('Long Text');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -22,7 +26,7 @@ class Utils_RecordBrowser_Recordset_Field_LongText extends Utils_RecordBrowser_R
         return $ret;
     }
     
-    public static function encodeValue($value) {
+    public static function encodeValue($value, $options = []) {
     	return Utils_BBCodeCommon::optimize($value);
     }
 
@@ -53,5 +57,5 @@ class Utils_RecordBrowser_Recordset_Field_LongText extends Utils_RecordBrowser_R
    		$form->addElement('textarea', $field, $label, ['id' => $field]);
    		if ($mode !== 'add')
    			$form->setDefaults([$field => $default]);
-    }   
+    }
 }

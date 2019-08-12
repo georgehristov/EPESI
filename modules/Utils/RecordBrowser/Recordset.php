@@ -18,6 +18,8 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	protected $adminFields;
 	protected $displayFields;
 	protected $hash;
+	protected $keyHash;
+	protected $arrayKeys;
 	protected $callbacks;
 	protected $addons;
 		
@@ -28,6 +30,8 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	 * @return Utils_RecordBrowser_Recordset
 	 */
 	public static function create($tab, $force = false) {
+		if (is_object($tab)) return $tab;
+		
 		if (!isset(self::$cache[$tab]) || $force) {
 			self::$cache[$tab] = new static($tab);
 		}
@@ -168,14 +172,17 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}	
 	
 	public function setField($desc) {
-		if ($desc['field'] == 'id') return;
-		
-		$desc = array_merge($desc, $this->getCallbacks($desc['field']));
-		
-		if (!$field = Utils_RecordBrowser_Recordset_Field::create($this, $desc)) return;
-		
-		$this->adminFields[$desc['field']] = $field;
+		if ($desc instanceof Utils_RecordBrowser_Recordset_Field) {
+			$field = $desc;
+		}
+		else {
+			$desc = array_merge($desc, $this->getCallbacks($desc['field']));
 
+			if (!$field = Utils_RecordBrowser_Recordset_Field::create($this, $desc)) return $this;
+		}
+
+		$this->adminFields[$desc['field']] = $field;
+		
 		return $this;
 	}
 	
@@ -187,7 +194,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		$this->displayFields = $this->displayFields?: array_filter($this->getAdminFields(), function (Utils_RecordBrowser_Recordset_Field $field) {
 			return $field['active'] && $field['type'] != 'page_split';
 		});
-		
+
 		$ret = $this->displayFields;
 		if ($order !== 'position') {
 			$callback = is_callable($order)? $order: function ($field1, $field2) use ($order) {
@@ -196,19 +203,38 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 			
 			uasort($ret, $callback);
 		}
+
+		return $ret;
+	}
+	
+	public function getVisibleFields($custom = []) {
+		$ret = [];
+		foreach($this->getRecordset()->getFields() as $field){
+			if (!$field['visible'] && (!isset($custom[$field['id']]) || $custom[$field['id']] === false)) continue;
+			
+			if (isset($custom[$field['id']]) && $custom[$field['id']] === false) continue;
+			
+			$ret[$field['id']] = true;
+		}
 		
 		return $ret;
 	}
 	
 	public function getAdminFields() {
 		if (!$this->adminFields) {
+			foreach (Utils_RecordBrowser_Recordset_Field::getSpecial() as $class) {
+				$this->setField($class::create($this));
+			}
+			
 			$result = DB::Execute('SELECT * FROM ' . $this->getTab() . '_field ORDER BY position');
 			
 			while($desc = $result->FetchRow()) {
+				if ($desc['field'] == 'id') continue;
+				
 				$this->setField($desc);
-			}
+			}			
 		}
-		
+
 		return $this->adminFields;
 	}
 	
@@ -220,12 +246,14 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	public function getField($name, $quiet = false) {
 		$fields = $this->getFields();
 		
-		$fieldName = isset($fields[$name])? $name: $this->getHash($name);
-		
+		$fieldName = isset($fields[$name])? $name: ($this->getHash($name)?: $this->getKeyHash($name));
+
 		if (!$fieldName || !isset($fields[$fieldName])) {
-			if ($quiet) return [];
-			
-			trigger_error('Unknown field "'.$name.'" for recordset "'.$this->getTab().'"',E_USER_ERROR);
+			if (!$quiet) {
+				trigger_error('Unknown field "'.$name.'" for recordset "'.$this->getTab().'"',E_USER_ERROR);
+			}
+
+			$fields[$fieldName] = Utils_RecordBrowser_Recordset_Field::create($this);
 		}
 		
 		return $fields[$fieldName];
@@ -238,7 +266,57 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 			}
 		}	
 		
-		return $name? ($this->hash[$name]?? null): $this->hash;
+		return $name? ($this->hash[strtolower($name)]?? null): $this->hash;
+	}
+	
+	public function getKeyHash($name = null) {
+		if (!$this->keyHash) {
+			foreach ($this->getAdminFields() as $field) {
+				if (!$arrayId = $field->getArrayId()) continue;
+				
+				$this->keyHash[$arrayId] = $field->getName();
+			}
+		}	
+		
+		return $name? ($this->keyHash[strtolower($name)]?? null): $this->keyHash;
+	}
+	
+	public function getRecordArrayKeys() {
+		if (!$this->arrayKeys) {
+			foreach ($this->getAdminFields() as $field) {
+				$this->arrayKeys[] = $field->getArrayId();
+			}
+		}	
+		
+		return $this->arrayKeys;
+	}
+	
+	public function getUserAccess($action, $admin = false) {
+		return Utils_RecordBrowser_Recordset_Access::create($this, $action)->getUserAccess($admin);
+	}
+	
+	public function getUserValuesAccess($action, $values, $admin = false) {
+		return Utils_RecordBrowser_Recordset_Access::create($this, $action, $values)->getUserAccess($admin);
+	}
+	
+	public function getProcessMethods() {
+		static $cache;
+		
+		$tab = $this->getTab();
+		if (!isset($cache[$tab])) {			
+			$result = DB::Execute('SELECT * FROM recordbrowser_processing_methods WHERE tab=%s', [$tab]);
+			
+			$cache[$tab] = [];
+			while ($row = $result->FetchRow()) {
+				$callback = explode('::',$row['func']);
+				
+				if (!is_callable($callback)) continue;
+				
+				$cache[$tab][] = $callback;
+			}
+		}
+		
+		return $cache[$this->getTab()];
 	}
 	
 	public function getCallbacks($field) {
@@ -301,29 +379,191 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
 	}
 		
-	public function getRecord($id, $htmlspecialchars = true) {
-		if (!is_numeric($id) || !isset($id)) return;
-		
-		$row = DB::GetRow("SELECT * FROM {$this->getTab()}_data_1 WHERE id=%d", [$id]);
-		
-		if (!isset($row['active'])) return;
-		
-		$record = [
-				'id' => $id,
-				'created_by' => $row['created_by'],
-				'created_on' => $row['created_on'],
-				':active' => $row['active']
-		];
-		
-		foreach($this->getFields() as $field) {
-			$sqlId = $field->getSqlId();
+	public function getRecords($crits = [], $order = [], $limit = [], $admin = false) {
+		$result = $this->select($crits, $order, $limit, $admin);
+	
+		$records = [];
+		while ($row = $result->FetchRow()) {
+			if (isset($records[$row['id']])) continue;
 			
-			$record[$field->getId()] = isset($row[$sqlId])? $field->decodeValue($row[$sqlId], $htmlspecialchars): $field->defaultValue();
+			$record = $this->getRecord($row);
+
+			if (!$admin && !$record->getUserAccess('view')) continue;
+			
+			$records[$row['id']] = $record;
+		}
+
+		return $records;
+	}
+	
+	public function getRecord($id, $htmlspecialchars = true) {
+		if (!isset($id)) return [];
+		
+		if (is_object($id)) return $id;
+		
+		$row = is_numeric($id)? DB::GetRow("SELECT * FROM {$this->getTab()}_data_1 WHERE id=%d", [$id]): $id;
+
+		if (!isset($row['active'])) return [];
+
+		$values = [];
+		foreach ($this->getFields() as $field) {
+			$values = array_merge($values, $field->process($row, 'get', compact('htmlspecialchars')));
+		}
+
+		return Utils_RecordBrowser_Recordset_Record::create($this, $values);
+	}
+	
+	public function getRecordsCount($crits = [], $admin = false)
+	{
+		$query = $this->getQuery($crits);
+				
+		return DB::GetOne($query->getCountSQL(), $query->getValues());
+	}
+	
+	public function addRecord($values = [])
+	{
+		$fields = $this->getFields();
+
+		$values = $this->getDefaultValues('add', $values);
+		
+		$values = $this->process($values, 'add');
+		
+		if ($values === false) return;
+
+		$fieldList = [];
+		$fieldTypes = [];
+		$fieldValues = [];
+		foreach($fields as $field) {
+			if (!$result = $field->process($values, 'add')) continue;
+				
+			$value = $result[$field->getId()]?? '';
+			
+			if ($value === '') continue;
+			
+			if (!$sqlId = $field->getSqlId()) continue;
+			
+			if (!$sqlType = $field->getSqlType()) continue;			
+				
+			$fieldList[] = $sqlId;
+			$fieldTypes[] = $sqlType;				
+			$fieldValues[] = $value;
+		}
+
+		DB::Execute("INSERT INTO {$this->getTab()}_data_1 (" . implode(',', $fieldList) . ') VALUES (' . implode(',', $fieldTypes) . ')', $fieldValues);
+		
+		$id = DB::Insert_ID($this->getTab() . '_data_1', 'id');
+			
+		$values['id'] = $id;
+		foreach($fields as $field) {
+			$values = $field->process($values, 'added');
 		}
 		
-		return $record;
-	}
+		$this->process($values, 'added');
+			
+		//TODO: Georgi Hristov move below to a seperate record processing callback
+		$user = Acl::get_user();
+		if ($user) Utils_RecordBrowserCommon::add_recent_entry($this->getTab(), $user, $id);
+		if (Base_User_SettingsCommon::get('Utils_RecordBrowser', $this->getTab().'_auto_fav'))
+		DB::Execute("INSERT INTO {$this->getTab()}_favorite (user_id, {$this->getTab()}_id) VALUES (%d, %d)", [$user, $id]);
 		
+		if (Base_User_SettingsCommon::get('Utils_RecordBrowser', $this->getTab().'_auto_subs')==1)
+			Utils_WatchdogCommon::subscribe($this->getTab(), $id);
+		Utils_WatchdogCommon::new_event($this->getTab(), $id, 'C');
+		//up to here
+					
+		return $id;
+	}
+	
+	public function getDefaultValues($mode, $customDefaults) {
+		$ret = [];
+		foreach($this->getFields() as $field) {
+			$ret[$field->getId()] = $customDefaults[$field->getId()]?? $field->defaultValue($mode);
+		}
+		
+		return $ret;
+	}
+	
+	public function process($values, $mode, $cloned = null) {
+		$values = is_object($values)? $values->toArray(): $values;
+		
+		$current = $values;
+		
+		$ret = $mode != 'display'? $values: [];
+		
+		$current = $mode=='cloned'? ['original'=>$cloned, 'clone'=>$values]: $values;
+		foreach ($this->getProcessMethods() as $callback) {
+			$return = call_user_func($callback, $current, $mode, $this->getTab());
+			
+			if ($return === false) return false;
+			
+			if (!$return) continue;
+			
+			//TODO: GH array_merge_recursive will not work or record objects
+			if ($mode == 'display') {
+				$ret = array_merge_recursive($ret, $return);
+			}
+			else {
+				$current = $return;
+			}
+		}
+		
+		return $mode == 'display'? $ret: $current;
+	}
+	
+	public function createQuery($sql = '', $values = [])
+	{
+		return Utils_RecordBrowser_Recordset_Query::create($this, $sql, $values);
+	}
+	
+	protected function select($crits = [], $order = [], $limit = [], $admin = false)
+	{
+		$limit = array_merge(is_numeric($limit)? ['numrows' => $limit]: $limit, [
+				'offset' => 0,
+				'numrows' => -1
+		]);
+		
+		$query = $this->getQuery($crits);
+		var_dump($query->getSelectSql($order));
+		return DB::SelectLimit($query->getSelectSql($order), $limit['numrows'], $limit['offset'], $query->getValues());
+	}
+	
+	/**
+	 * @param array $crits
+	 * @param boolean $admin
+	 * @return Utils_RecordBrowser_Recordset_Query
+	 */
+	public function getQuery($crits = [], $admin = false)
+	{
+		static $cache;
+		static $stack = [];
+				
+		$key = $this->getTab() . '__' . $this->getTabAlias() . '__' . md5(serialize($crits)) . '__' . $admin . '__' . Acl::get_user();
+		
+		if (isset($cache[$key])) return $cache[$key];
+		
+		$crits = $crits? [Utils_RecordBrowser_Crits::create($crits)]: [];
+			
+		$accessCrits = ($admin || in_array($this->getTab(), $stack))?: Utils_RecordBrowserCommon::get_access_crits($this->getTab(), 'browse');
+		if ($accessCrits == false) return [];
+		elseif ($accessCrits !== true) {
+			$crits[] = $accessCrits;
+		}
+		var_dump($accessCrits->toWords($this));
+		if ($admin) {
+			$adminCrits = str_replace('<tab>', $this->getTabAlias(), Utils_RecordBrowserCommon::$admin_filter);
+		} else {
+			$adminCrits = $this->getTabAlias() . '.active=1';
+		}
+		
+		$crits[] = Utils_RecordBrowser_Recordset_Query_Crits_RawSQL::create($adminCrits);
+
+		array_push($stack, $this->getTab());
+		$cache[$key] = Utils_RecordBrowser_Crits::create($crits)->getQuery($this);
+		array_pop($stack);
+		
+		return $cache[$key];
+	}
+	
 	/**
 	 * @return string
 	 */

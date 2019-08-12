@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'checkbox';
+	}
+	
 	public static function typeLabel() {
-		return __('Checkbox');
+		return _M('Checkbox');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -20,22 +24,26 @@ class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_R
     	 return false;
     }
     
-    public static function encodeValue($value) {
+    public static function encodeValue($value, $options = []) {
     	return $value? 1: 0;
+    }
+    
+    public function defaultValue($mode) {
+    	return 0;
     }
     
     public static function createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj) {
     	return isset($rb_obj->display_callback_table[$desc->getId()])? parent::createQFfieldStatic($form, $mode, $default, $rb_obj): false;
     }
     
-    public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Single $crit) {
+    public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
     	$field = $this->getQueryId();    	
     	$operator = $crit->getSqlOperator();
     	$value = $crit->getSqlValue();
     
     	if ($operator == DB::like()) {
             if (DB::is_postgresql()) $field .= '::varchar';
-            return Utils_RecordBrowser_Recordset_Query_Section::create("$field $operator %s", [$value]);
+            return $this->getRecordset()->createQuery("$field $operator %s", [$value]);
         }
         if ($operator == '!=') {
             $sql = $value ?
@@ -47,7 +55,7 @@ class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_R
                     "$field IS NULL OR $field=%b";
         }
         
-        return Utils_RecordBrowser_Recordset_Query_Section::create($sql, [$value ? true : false]);
+        return $this->getRecordset()->createQuery($sql, [$value ? true : false]);
     }   
     
     public static function getAjaxTooltip($opts) {

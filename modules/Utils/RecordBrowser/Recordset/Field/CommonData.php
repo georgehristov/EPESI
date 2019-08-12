@@ -5,10 +5,14 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser_Recordset_Field {
 	protected $multiselect = false;
 	
-	public static function typeLabel() {
-		return __('Commondata');
+	public static function typeKey() {
+		return 'commondata';
 	}
 	
+	public static function typeLabel() {
+		return _M('Commondata');
+	}
+		
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
 		return array_merge(parent::gridColumnOptions($recordBrowser), [
 				'wrapmode' => 'nowrap',
@@ -66,18 +70,16 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
 	    return $ret?: ' ' . $this->getQueryId() . ' ' . $direction; // key or if position or value failed
     }
         
-    public function getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Single $crit) {
+    public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
     	$field = $this->getQueryId();
     	$operator = $crit->getSqlOperator();
     	$value = $crit->getSqlValue();
-    	
-    	list(, $sub_field) = Utils_RecordBrowser_Recordset_Query_Crits_Single::parse_subfield($crit->get_field());
 
     	if ($value === null || $value === false || $value === '') {
-    		return Utils_RecordBrowser_Recordset_Query_Section::create("$field IS NULL OR $field=''");
+    		return $this->getRecordset()->createQuery("$field IS NULL OR $field=''");
     	}
     	
-    	if ($sub_field !== false) { // may be empty string for value lookup with field[]
+    	if ($crit->getKey()->getSubfield() !== false) { // may be empty string for value lookup with field[]
     		$ret = Utils_CommonDataCommon::get_translated_array($this['select']['array_id']);
     		$val_regex = $operator == DB::like() ?
     		'/' . preg_quote($value, '/') . '/i' :
@@ -104,15 +106,9 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     		$vals[] = $val;
     	}
 
-    	return Utils_RecordBrowser_Recordset_Query_Section::create(implode(' OR ', $sql), $vals);
+    	return $this->getRecordset()->createQuery(implode(' OR ', $sql), $vals);
     }
     
-    public function handleCritsRawSql($field, $operator, $value) {
-    	list($field, ) = Utils_RecordBrowser_CritsSingle::parse_subfield($field);
-    	
-    	return [$field . " $operator $value", []];
-    }
-
     public function getAjaxTooltipOpts() {
     	return [
     			'param' => $this->getParam()

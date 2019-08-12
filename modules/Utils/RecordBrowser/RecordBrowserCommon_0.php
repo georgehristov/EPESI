@@ -16,7 +16,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     private static $del_or_a = '';
     public static $admin_filter = '';
     /**
-     * @var array[Utils_RecordBrowser_Recordset_Field_Interface]
+     * @var array[Utils_RecordBrowser_Recordset_Field]
      * @deprecated
      */
     public static $table_rows = array();
@@ -1054,77 +1054,25 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
             }
     }
 
-	public static function record_processing($tab, $base, $mode, $clone=null) {
-        self::check_table_name($tab);
-		static $cache = array();
-		if (!isset($cache[$tab])) {
-			$ret = DB::Execute('SELECT * FROM recordbrowser_processing_methods WHERE tab=%s', array($tab));
-			$cache[$tab] = array();
-			while ($row = $ret->FetchRow()) {
-				$callback = explode('::',$row['func']);
-				if (is_callable($callback))
-					$cache[$tab][] = $callback;
-			}
-		}
-		$current = $base;
-		if ($mode=='display') $result = array();
-		else $result = $base;
-		if ($mode=='cloned') $current = array('original'=>$clone, 'clone'=>$current);
-		foreach ($cache[$tab] as $callback) {
-			$return = call_user_func($callback, $current, $mode, $tab);
-			if ($return===false) return false;
-			if ($return) {
-				if ($mode!='display') $current = $return;
-				else $result = array_merge_recursive($result, $return);
-			}
-		}
-		if ($mode!='display') $result = $current;
-		return $result;
+    /**
+     * @param string|Utils_RecordBrowser_Recordset		 $recordset
+     * @param array										 $values
+     * @param string $mode
+     * @param array $cloned
+     * @return array|false
+     * @deprecated
+     */
+    public static function record_processing($recordset, $values, $mode, $cloned=null) {
+		return Utils_RecordBrowser_Recordset::create($recordset)->process($values, $mode, $cloned);
 	}
 
-    public static function new_record( $tab, $values = array()) {
-    	$fields = Utils_RecordBrowser_Recordset::create($tab)->getFields();
-        $user = Acl::get_user();
-
-		$for_processing = $values;
-		foreach($fields as $desc)
-			$for_processing[$desc['id']] = $for_processing[$desc['id']]?? $desc->defaultValue();
-			
-		$values = self::record_processing($tab, $for_processing, 'add');
-		if ($values===false) return;
-
-		$fields_list = 'created_on,created_by,active';
-        $fields_types = '%T,%d,%d';
-        $vals = array(date('Y-m-d H:i:s'), $user, 1);
-        foreach($fields as $desc) {
-        	if (!$result = $desc->process($values, 'add')) continue;
-        	
-        	$fields_types .= ',' . $desc->getSqlType();
-        	$fields_list .= ',' . $desc->getSqlId();
-        	
-        	$vals[] = $result[$desc->getId()];
-        }
-        DB::Execute("INSERT INTO {$tab}_data_1 ({$fields_list}) VALUES ({$fields_types})", $vals);
-        $id = DB::Insert_ID($tab.'_data_1', 'id');
-
-		$values['id'] = $id;
-		foreach($fields as $desc) {
-			$values = $desc->process($values, 'added');
-        }
-		
-		self::record_processing($tab, $values, 'added');
-
-		//TODO: Georgi Hristov move below to a seperate record processing callback
-		if ($user) self::add_recent_entry($tab, $user, $id);
-		if (Base_User_SettingsCommon::get('Utils_RecordBrowser',$tab.'_auto_fav'))
-			DB::Execute("INSERT INTO {$tab}_favorite (user_id, {$tab}_id) VALUES (%d, %d)", [$user, $id]);
-		
-        if (Base_User_SettingsCommon::get('Utils_RecordBrowser',$tab.'_auto_subs')==1)
-            Utils_WatchdogCommon::subscribe($tab,$id);
-        Utils_WatchdogCommon::new_event($tab,$id,'C');
-		//up to here
-        
-        return $id;
+	/**
+	 * @param string|Utils_RecordBrowser_Recordset		$recordset
+	 * @param array 									$values
+	 * @return integer
+	 */
+	public static function new_record($recordset, $values = []) {
+		return Utils_RecordBrowser_Recordset::create($recordset)->addRecord($values);
     }
 
     public static function new_record_history($tab,$id,$old_value) {
@@ -1250,76 +1198,41 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 						$user_id,
 						date('Y-m-d H:i:s')));
     }
+    
     public static function merge_crits($a = array(), $b = array(), $or=false) {
-        if (is_array($a)) {
-            $a = Utils_RecordBrowser_Crits::from_array($a);
-        }
-        if (!($a instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound)) {
-            $a = new Utils_RecordBrowser_Crits($a);
-        }
-        if (is_array($b)) {
-            $b = Utils_RecordBrowser_Crits::from_array($b);
-        }
-        if (!($b instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound)) {
-            $b = new Utils_RecordBrowser_Crits($b);
-        }
-        if ($a->is_empty()) {
-            return clone $b;
-        }
-        if ($b->is_empty()) {
-            return clone $a;
-        }
-        $a = clone $a;
-        $b = clone $b;
-        $ret = $or ? $a->_or($b) : $a->_and($b);
-        return $ret;
+    	return Utils_RecordBrowser_Crits::create([$a, $b], $or);
     }
-    public static function build_query($tab, $crits = null, $admin = false, $order = array(), $tab_alias = 'r') {
-        static $stack = array();
-        static $cache;
-        if (!is_object($crits)) {
-            $crits = Utils_RecordBrowser_Crits::from_array($crits);
-        }
-        $cache_key = $tab . '__' . $tab_alias . '__' . md5(serialize($crits)) . '__' . $admin . '__' . md5(serialize($order)) . '__' . Base_AclCommon::get_user();
-        if (isset($cache[$cache_key])) {
-            return $cache[$cache_key];
-        }
-
-        $access_crits = ($admin || in_array($tab, $stack)) ? true : self::get_access_crits($tab, 'browse');
-        if ($access_crits == false) return array();
-        elseif ($access_crits !== true) {
-            $crits = self::merge_crits($crits, $access_crits);
-        }
-
-        if ($admin) {
-            $admin_filter = str_replace('<tab>', $tab_alias, self::$admin_filter);
-        } else {
-            $admin_filter = $tab_alias . '.active=1 AND ';
-        }
-        array_push($stack, $tab);
-        $recordset = Utils_RecordBrowser_Recordset::create($tab)->setTabAlias($tab_alias);
-        
-        $ret = Utils_RecordBrowser_Recordset_Query_Builder::create($recordset, $admin)->build_query($crits, $order, $admin_filter);
-        $cache[$cache_key] = $ret;
-        array_pop($stack);
-        return $ret;
+    
+    /**
+     * @param string|Utils_RecordBrowser_Recordset 		$recordset
+     * @param array|Utils_RecordBrowser_Crits 			$crits
+     * @param boolean									$admin
+     * @param array 									$order
+     * @param string 									$tabAlias
+     * @return array
+     */
+    public static function build_query($recordset, $crits = null, $admin = false, $order = array(), $tabAlias = 'r') {
+    	$query = Utils_RecordBrowser_Recordset::create($recordset)->setTabAlias($tabAlias)->getQuery($crits, $admin);
+    	
+    	return [
+    			'sql' => $query->getSql() . $query->getOrderSql($order),
+    			'vals' => $query->getValues()
+    	];
     }
 
     /**
      * Get records count
      *
-     * @param string                          $tab
-     * @param array|Utils_RecordBrowser_Crits $crits
-     * @param bool                            $admin
-     * @param array                           $order Just for SQL cache optimization. Same query will be used to fetch records
+     * @param string|Utils_RecordBrowser_Recordset		$recordset
+     * @param array|Utils_RecordBrowser_Crits 			$crits
+     * @param bool                            			$admin
      *
      * @return int records count
      */
-    public static function get_records_count( $tab, $crits = null, $admin = false, $order = array()) {
-        $par = self::build_query($tab, $crits, $admin, $order);
-        if (empty($par) || !$par) return 0;
-        return DB::GetOne('SELECT COUNT(*) FROM'.$par['sql'], $par['vals']);
+    public static function get_records_count( $tab, $crits = null, $admin = false) {
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecordsCount($crits, $admin);
     }
+    
     public static function get_next_and_prev_record( $tab, $crits, $order, $id, $last = null) {
         $par = self::build_query($tab, $crits, false, $order);
         if (empty($par) || !$par) return null;
@@ -1357,116 +1270,94 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function get_records( $tab, $crits = array(), $cols = array(), $order = array(), $limit = array(), $admin = false) {
         if (!$tab) return false;
-        if (is_numeric($limit)) {
-            $limit = array('numrows'=>$limit,'offset'=>0);
-        } else {
-            if (!isset($limit['offset'])) $limit['offset'] = 0;
-            if (!isset($limit['numrows'])) $limit['numrows'] = -1;
-        }
-        if (!$order) $order = array();
-        $tab_alias = 'r';
-        $par = self::build_query($tab, $crits, $admin, $order, $tab_alias);
-        if (empty($par)) return array();
-        $ret = DB::SelectLimit('SELECT ' . $tab_alias . '.* FROM'.$par['sql'].$par['order'], $limit['numrows'], $limit['offset'], $par['vals']);
-        $records = [];
-        $fields = Utils_RecordBrowser_Recordset::create($tab)->getFields();
-        while ($row = $ret->FetchRow()) {
-            if (isset($records[$row['id']])) continue;
-
-			$record = [
-					'id' => $row['id'],
-					':active' => $row['active'],
-					'created_by' => $row['created_by'],
-					'created_on' => $row['created_on']
-			];
-			
-			foreach ($fields as $desc) {
-				$sqlId = $desc->getSqlId();
-
-				$record[$desc['id']] = isset($row[$sqlId])? $desc->decodeValue($row[$sqlId]): $desc->defaultValue();
-            }
-            
-            if (!$admin && !self::get_access($tab, 'view', $record)) continue;
-            
-            $records[$row['id']] = $record;
-        }
-
-        return $records;
+        
+        return Utils_RecordBrowser_Recordset::create($tab)->getRecords($crits, $order, $limit, $admin);
     }
-    public static function check_record_against_crits($tab, $id, $crits, & $problems = array()) {
-        if (is_numeric($id)) $r = self::get_record($tab, $id);
-        else $r = $id;
-        if (!is_object($crits)) {
-            $crits = Utils_RecordBrowser_Crits::from_array($crits);
-        }
-        $crits_validator = new Utils_RecordBrowser_CritsValidator($tab);
-        $crits->normalize();
-        list($success, $issues) = $crits_validator->validate($crits, $r);
-        if (!$success) {
-            $problems = $issues;
-        }
-        return $success;
+    
+    public static function check_record_against_crits($tab, $id, $crits, & $issues = []) {
+    	$recordset = Utils_RecordBrowser_Recordset::create($tab);
+    	
+    	$issues = Utils_RecordBrowser_Crits::create($crits)->validate($recordset, $id);
+        
+        return $issues? false: true;
     }
+    
     public static function crits_special_values()
     {
-        $ret = array();
-        $ret[] = new Utils_RecordBrowser_ReplaceValue('USER_ID', __('User Login'), Base_AclCommon::get_user());
-        foreach (array('VIEW', 'VIEW_ALL', 'EDIT', 'EDIT_ALL', 'PRINT', 'PRINT_ALL', 'DELETE', 'DELETE_ALL') as $a) {
-            $description = 'Allow ' . str_replace('_', ' ', strtolower($a)) . ' record(s)';
-            $ret[] = new Utils_RecordBrowser_ReplaceValue("ACCESS_$a", _V($description), 'Utils_RecordBrowserCommon::get_recursive_'.strtolower($a).'_access');
-        }
-        return $ret;
-    }
-	public static function get_recursive_access($otab,&$r,$field,$action,$any) {
-            self::init($otab);
-            $desc = self::$table_rows[self::$hash[$field]];
-
-            $param = self::decode_select_param($desc['param']);
-
-            if($param['single_tab']=='__COMMON__') return $r[$field];
+        $ret = [];
+        
+        $ret[] = Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create('USER_ID', __('User Login'), Acl::get_user());
+        
+        foreach (['VIEW', 'VIEW_ALL', 'EDIT', 'EDIT_ALL', 'PRINT', 'PRINT_ALL', 'DELETE', 'DELETE_ALL'] as $action) {
+            $description = 'Allow ' . str_replace('_', ' ', strtolower($action)) . ' record(s)';
             
-            $ret = true;
-            $field_is_empty = true;
-        if (!isset($r[$field])) $values = array();
-            elseif(!is_array($r[$field])) $values = array($r[$field]);
-            else $values = $r[$field];
-            foreach($values as $rid) {
-            	if (!$rid) continue;
-            	$val = self::decode_record_token($rid, $param['single_tab']);
-				if(!$val) continue;
-            	list($tab, $rid) = $val;
-            	$rr = self::get_record($tab, $rid);
-            	$access = self::get_access($tab, $action, $rr);
-            	$field_is_empty = false;
-            	if($any && $access) return $r[$field];
-            	$ret &= $access;
-            }
-            return $field_is_empty ? true : ($ret ? true : false);
+            $ret[] = Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create("ACCESS_$action", _V($description), '__CALLBACK__::Utils_RecordBrowserCommon::get_recursive_'.strtolower($action).'_access');
+        }
+        
+		return $ret;
+    }
+    public static function get_recursive_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field, $action, $any) {
+    	if (!in_array($field->getType(), ['select', 'multiselect'])) return $record[$field->getId()];
+    	
+    	$param = $field->getParam();
+
+       	if($param['single_tab']=='__COMMON__') return $record[$field->getId()];
+            
+       	$ret = true;
+       	$field_is_empty = true;
+            
+       	$values = $record[$field->getId()]?? [];
+
+       	foreach (is_array($values)? $values: [$values] as $rid) {
+         	if (!$rid) continue;
+         	
+         	if (!$val = self::decode_record_token($rid, $param['single_tab'])) continue;
+
+           	list($tab, $rid) = $val;
+
+           	$access = self::get_access($tab, $action, $rid);
+           	
+           	$field_is_empty = false;
+           	
+           	if($any && $access) return $record[$field->getId()];
+           	
+           	$ret &= $access;
+        }
+        
+    	return $field_is_empty ? true : ($ret ? true : false);
 	}
-	public static function get_recursive_view_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'view',true);
+	
+	public static function get_recursive_view_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'view', true);
 	}
-        public static function get_recursive_view_all_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'view',false);
-        }
-        public static function get_recursive_edit_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'edit',true);
-        }
-        public static function get_recursive_edit_all_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'edit',false);
-        }
-        public static function get_recursive_print_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'print',true);
-        }
-        public static function get_recursive_print_all_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'print',false);
-        }        
-        public static function get_recursive_delete_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'delete',true);
-        }
-        public static function get_recursive_delete_all_access($tab,&$r,$field) {
-            return self::get_recursive_access($tab,$r,$field,'delete',false);
-        }
+
+	public static function get_recursive_view_all_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'view', false);
+	}
+
+	public static function get_recursive_edit_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'edit', true);
+	}
+
+	public static function get_recursive_edit_all_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'edit', false);
+	}
+
+	public static function get_recursive_print_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'print', true);
+	}
+
+	public static function get_recursive_print_all_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'print', false);
+	}
+
+	public static function get_recursive_delete_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'delete', true);
+	}
+
+	public static function get_recursive_delete_all_access(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Field $field) {
+		return self::get_recursive_access($record, $field, 'delete', false);
+	}
 
     public static function serialize_crits($crits)
     {
@@ -1675,7 +1566,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	 * @return false - deny access | array - fields access array
 	 */
 	public static function get_access($tab, $action, $record=null, $return_crits=false, $return_in_array=false){
-		$access = Utils_RecordBrowser_Access::create($tab, $action, $record);
+		$access = Utils_RecordBrowser_Recordset_Access::create($tab, $action, $record);
 		
 		//start deprecated code - used for backward compatibility
 		if ($return_crits) {
@@ -1696,9 +1587,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      * @return null|boolean|Utils_RecordBrowser_Crits
      */
     public static function get_access_crits($tab, $action, $record=null) { 
-    	$access = Utils_RecordBrowser_Access::create($tab, $action, $record);
-    	
-    	return $access->getCrits();
+    	return Utils_RecordBrowser_Recordset_Access::create($tab, $action, $record)->getCrits();
     }
     
     /**
@@ -1708,7 +1597,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      * @return array - rule_id => rule
      */
     public static function get_access_rule_crits($tab, $action, $record=null) {
-    	$access = Utils_RecordBrowser_Access::create($tab, $action, $record);
+    	$access = Utils_RecordBrowser_Recordset_Access::create($tab, $action, $record);
     	
     	return $access->getRuleCrits();
     }
@@ -2244,8 +2133,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         if ($force == false && Utils_TooltipCommon::is_tooltip_code_in_str($string)) {
             return $string;
         }
-        $string = Utils_TooltipCommon::ajax_create($string, array(__CLASS__, 'default_record_tooltip'), array($tab, $id));
-        return $string;
+        
+        return Utils_TooltipCommon::ajax_create($string, [__CLASS__, 'default_record_tooltip'], [$tab, $id]);
     }
 
     public static function get_record_tooltip_data($tab, $record_id)
@@ -3414,26 +3303,35 @@ function rb_and($crits, $_ = null)
 
 require_once 'modules/Utils/RecordBrowser/object_wrapper/include.php';
 
-Utils_RecordBrowser_Crits::register_special_value_callback(array('Utils_RecordBrowserCommon', 'crits_special_values'));
+Utils_RecordBrowser_Crits::registerPlaceholderCallback(['Utils_RecordBrowserCommon', 'crits_special_values']);
 
 Utils_RecordBrowser_Recordset_Field::register([
-		'text' => Utils_RecordBrowser_Recordset_Field_Text::class,
-		'long text' => Utils_RecordBrowser_Recordset_Field_LongText::class,
-		'select' => Utils_RecordBrowser_Recordset_Field_Select::class,
-		'multiselect' => Utils_RecordBrowser_Recordset_Field_MultiSelect::class,
-		'commondata' => Utils_RecordBrowser_Recordset_Field_CommonData::class,
-		'multicommondata' => Utils_RecordBrowser_Recordset_Field_MultiCommonData::class,
-		'float' => Utils_RecordBrowser_Recordset_Field_Float::class,
-		'integer' => Utils_RecordBrowser_Recordset_Field_Integer::class,
-		'date' => Utils_RecordBrowser_Recordset_Field_Date::class,
-		'time' => Utils_RecordBrowser_Recordset_Field_Time::class,
-		'timestamp' => Utils_RecordBrowser_Recordset_Field_Timestamp::class,
-		'currency' => Utils_RecordBrowser_Recordset_Field_Currency::class,
-		'checkbox' => Utils_RecordBrowser_Recordset_Field_Checkbox::class,
-		'calculated' => Utils_RecordBrowser_Recordset_Field_Calculated::class,
-		'autonumber' => Utils_RecordBrowser_Recordset_Field_Autonumber::class,
-		'currency' => Utils_RecordBrowser_Recordset_Field_Currency::class,
-		'hidden' => Utils_RecordBrowser_Recordset_Field_Hidden::class,
+		Utils_RecordBrowser_Recordset_Field_Special_Id::class,
+		Utils_RecordBrowser_Recordset_Field_Special_Active::class,
+		Utils_RecordBrowser_Recordset_Field_Special_CreatedBy::class,
+		Utils_RecordBrowser_Recordset_Field_Special_CreatedOn::class,
+// 		Utils_RecordBrowser_Recordset_Field_Special_EditedOn::class,
+// 		Utils_RecordBrowser_Recordset_Field_Special_VisitedOn::class,
+// 		Utils_RecordBrowser_Recordset_Field_Special_Fav::class,
+// 		Utils_RecordBrowser_Recordset_Field_Special_Sub::class,
+// 		Utils_RecordBrowser_Recordset_Field_Special_Recent::class,
+		Utils_RecordBrowser_Recordset_Field_Text::class,
+		Utils_RecordBrowser_Recordset_Field_LongText::class,
+		Utils_RecordBrowser_Recordset_Field_Select::class,
+		Utils_RecordBrowser_Recordset_Field_MultiSelect::class,
+		Utils_RecordBrowser_Recordset_Field_CommonData::class,
+		Utils_RecordBrowser_Recordset_Field_MultiCommonData::class,
+		Utils_RecordBrowser_Recordset_Field_Float::class,
+		Utils_RecordBrowser_Recordset_Field_Integer::class,
+		Utils_RecordBrowser_Recordset_Field_Date::class,
+		Utils_RecordBrowser_Recordset_Field_Time::class,
+		Utils_RecordBrowser_Recordset_Field_Timestamp::class,
+		Utils_RecordBrowser_Recordset_Field_Currency::class,
+		Utils_RecordBrowser_Recordset_Field_Checkbox::class,
+		Utils_RecordBrowser_Recordset_Field_Calculated::class,
+		Utils_RecordBrowser_Recordset_Field_Autonumber::class,
+		Utils_RecordBrowser_Recordset_Field_Currency::class,
+		Utils_RecordBrowser_Recordset_Field_Hidden::class,
 ]);
 
 if(!READ_ONLY_SESSION) {

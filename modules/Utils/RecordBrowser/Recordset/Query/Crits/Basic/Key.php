@@ -27,9 +27,33 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Key
     	$this->fields = preg_split('/[\[\]]/', $this->key, -1, PREG_SPLIT_NO_EMPTY);
     }
     
+    public function __toString() 
+    {
+    	return $this->key;
+    }
+    
 	public function getFields()
 	{
 		return $this->fields;
+	}
+	
+	public function getField()
+	{
+		return reset($this->fields);
+	}
+	
+	public function getSubfield($sequence = 0)
+	{
+		return $this->getSubfields()[$sequence]?? '';
+	}
+	
+	public function getSubfields()
+	{
+		$subfields = $this->fields;
+		
+		array_shift($subfields);
+		
+		return $subfields;
 	}
 	
 	public function getModifiers() 

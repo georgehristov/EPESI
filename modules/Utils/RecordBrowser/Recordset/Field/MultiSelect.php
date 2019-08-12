@@ -5,8 +5,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowser_Recordset_Field_Select {
 	protected $multiselect = true;
 	
+	public static function typeKey() {
+		return 'multiselect';
+	}
+	
 	public static function typeLabel() {
-		return __('Multi Select');
+		return _M('Multi Select');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -15,15 +19,15 @@ class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowse
 		]);
 	}
 	
-	public function defaultValue() {
+	public function defaultValue($mode) {
 		return [];
 	}
 		
-	public static function decodeValue($value, $htmlspecialchars = true) {
+	public static function decodeValue($value, $options = []) {
 		return Utils_RecordBrowserCommon::decode_multi($value);
 	}
 		
-	public static function encodeValue($value) {
+	public static function encodeValue($value, $options = []) {
 		return Utils_RecordBrowserCommon::encode_multi($value);
 	}
 	

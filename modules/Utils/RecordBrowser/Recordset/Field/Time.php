@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Time extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'time';
+	}
+	
 	public static function typeLabel() {
-		return __('Time');
+		return _M('Time');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {

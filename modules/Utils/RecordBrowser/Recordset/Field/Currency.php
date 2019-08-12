@@ -4,8 +4,12 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Currency extends Utils_RecordBrowser_Recordset_Field {
 	
+	public static function typeKey() {
+		return 'currency';
+	}
+	
 	public static function typeLabel() {
-		return __('Currency');
+		return _M('Currency');
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {

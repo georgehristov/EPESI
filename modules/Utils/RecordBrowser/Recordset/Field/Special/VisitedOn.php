@@ -2,8 +2,8 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_Recordset_Field_Special_EditedOn extends Utils_RecordBrowser_Recordset_Field {
-	protected $id = 'edited_on';
+class Utils_RecordBrowser_Recordset_Field_Special_VisitedOn extends Utils_RecordBrowser_Recordset_Field {
+	protected $id = 'visited_on';
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
 		$value = $record[$desc['id']];
@@ -12,7 +12,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_EditedOn extends Utils_RecordB
 	}
 	
 	public function getName() {
-		return _M('Edited on');
+		return _M('Visited on');
 	}
 	
 	public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
@@ -34,19 +34,13 @@ class Utils_RecordBrowser_Recordset_Field_Special_EditedOn extends Utils_RecordB
 	}
 	
 	public function getSqlOrder($direction) {
-		return ' (CASE WHEN (SELECT 
-								MAX(edited_on) 
-							FROM ' . 
-								$this->getTab().'_edit_history 
-							WHERE ' . 
-								$this->getTab().'_id=' . $this->getTabAlias().'.id) 
-				IS NOT NULL THEN (SELECT 
-									MAX(edited_on) 
-								FROM ' .
-									$this->getTab().'_edit_history 
-								WHERE ' . 
-									$this->getTab().'_id='.$this->getTabAlias().'.id) 
-				ELSE ' . $this->getTabAlias() . '.created_on END) ' . $direction;
+		return ' (SELECT 
+					MAX(visited_on) 
+				FROM '.
+					$this->getTab().'_recent 
+				WHERE '.
+					$this->getTab().'_id='.$this->getTabAlias().'.id AND 
+					user_id='.Acl::get_user().') ' . $direction;
 	}
 	
 	public function processGet($values, $options = []) {

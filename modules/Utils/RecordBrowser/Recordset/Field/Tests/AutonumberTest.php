@@ -23,10 +23,10 @@ class Utils_RecordBrowser_Recordset_Field_Tests_AutonumberTest extends PHPUnit_F
 	function testQuerySection() {
 		$field = self::getMockField();
 		
-		$querySection = $field->getQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic::create('!test_autonumber', '5'));
+		$query = $field->getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic::create('!test_autonumber', '5'));
 		
-		$this->assertEquals('r.f_test_autonumber != %s AND r.f_test_autonumber IS NOT NULL', $querySection->getSQL());
+		$this->assertEquals('r.f_test_autonumber != %s AND r.f_test_autonumber IS NOT NULL', $query->getWhereSql());
 		
-		$this->assertEquals(['5'], $querySection->getValues());
+		$this->assertEquals(['5'], $query->getValues());
 	}
 }
