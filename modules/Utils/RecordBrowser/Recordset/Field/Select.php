@@ -51,10 +51,10 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		];
 	}
 	
-	function __construct($array) {
-		parent::__construct($array);
+	function __construct($recordset, $desc) {
+		parent::__construct($recordset, $desc);
 		
-		$this->single_tab = $this->param['single_tab'];
+		$this->single_tab = $this['param']['single_tab'];
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -227,45 +227,44 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 			$single_tab = count($select_tabs)==1? $select_tab: false;
 		}
 		
-		return array(
+		return [
 				'single_tab'=>$single_tab? $select_tab: false, //returns single tab name or false
 				'select_tabs'=>$select_tabs, //returns array of tab names
 				'cols'=>$cols, // returns array of columns for formatting the display value (used in case RB records select)
 				'crits_callback'=>$crits_callback, //returns crits callback (used in case RB records select)
 				'adv_params_callback'=>$adv_params_callback //returns adv_params_callback (used in case RB records select)
-		);
+		];
 	}
 	public static function encodeParam($param) {
-		if (!is_array($param))
-			$param = array($param);
+		$param = is_array($param)? $param: [$param];
 			
-			$order = 'value';
-			if (isset($param['order']) || isset($param['order_by_key'])) {
-				$order = Utils_CommonDataCommon::validate_order(isset($param['order'])? $param['order']: $param['order_by_key']);
+		$order = 'value';
+		if (isset($param['order']) || isset($param['order_by_key'])) {
+			$order = Utils_CommonDataCommon::validate_order(isset($param['order'])? $param['order']: $param['order_by_key']);
 				
-				unset($param['order']);
-				unset($param['order_by_key']);
-			}
+			unset($param['order']);
+			unset($param['order_by_key']);
+		}
 			
-			$array_id = implode('::', $param);
+		$array_id = implode('::', $param);
 			
-			return implode('__', array($order, $array_id));
+		return implode('__', [$order, $array_id]);
 	}
 	
 	public function getSqlOrder($direction) {
 
 		$tab2 = $this['param']['single_tab'];
-		$cols2 = $this['param']['cols'];
+		
 		$val = $this->getQueryId();
-		$fields2 = Utils_RecordBrowserCommon::init($tab2);
 		// search for better sorting than id
-		if ($fields2) {
+		if ($tab2) {
+			$recordset2 = Utils_RecordBrowser_Recordset::create($tab2)->setDataTableAlias('rdt');
+			$cols2 = $this['param']['cols'];
+			
 			foreach ($cols2 as $referenced_col) {
-				if (isset($fields2[$referenced_col])) {
-					$desc2 = $fields2[$referenced_col];
-					if ($desc2['type'] != 'calculated' || $desc2['param'] != '') {
-						$field_id2 = Utils_RecordBrowserCommon::get_field_id($referenced_col);
-						$val = '(SELECT rdt.f_'.$field_id2.' FROM '.$tab2.'_data_1 AS rdt WHERE rdt.id='.$this->getQueryId().')';
+				if ($field2 = $recordset2->getField($referenced_col, true)) {
+					if ($field2->getQueryId()) {
+						$val = '(SELECT ' . $field2->getQueryId() . ' FROM ' . $recordset2->getTab() . '_data_1 AS rdt WHERE rdt.id='.$this->getQueryId().')';
 						break;
 					}
 				}
@@ -277,10 +276,12 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 	
 	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
 		$param = $this->getParam();
+		$value = $crit->getValue()->getValue();
+		$operator = $crit->getOperator()->getOperator();
 		
 		$sql = '';
 		$vals = [];
-		list($field, $sub_field) = Utils_RecordBrowser_CritsSingle::parse_subfield($field);
+		$sub_field = $crit->getKey()->getSubfield();
 		
 		$field = $this->getQueryId();
 		
@@ -372,7 +373,8 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 			}
 			$sql = "($field IS NOT NULL AND ($q))";
 		}
-		return array($sql, $vals);
+		
+		return $this->getRecordset()->createQuery($sql, $vals);
 	}
 	
 	public function getAjaxTooltipOpts() {
@@ -384,9 +386,11 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 	public static function getAjaxTooltip($opts) {
 		$ret = '';
 		foreach ($opts['tabCrits']?? [] as $tab => $crits) {
-			$ret .= '<b>' . Utils_RecordBrowserCommon::get_caption($tab) . '</b>';
+			$recordset = Utils_RecordBrowser_Recordset::create($tab);
+
+			$ret .= '<b>' . $recordset->getCaption() . '</b>';
 			
-			if ($critsWords = Utils_RecordBrowserCommon::crits_to_words($tab, $crits)) {
+			if ($critsWords = Utils_RecordBrowser_Crits::create($crits)->toWords($recordset)) {
 				$ret .= ' ' . __('for which') . '<br />&nbsp;&nbsp;&nbsp;' . $critsWords;
 			}
 		}
@@ -396,63 +400,31 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
 		$ret = '---';
-		if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
-			$val = $record[$desc['id']];
-			$commondata_sep = '/';
-			if ((is_array($val) && empty($val))) return $ret;
+
+		if (!isset($desc['id'])) return $ret;
+		
+		if (!$val = $record[$desc['id']]?? '') return $ret;
+
+		$param = $desc['param'];
+		
+		$ret = [];
+		foreach (is_array($val)? $val: [$val] as $v) {	
+			$tab_id = Utils_RecordBrowserCommon::decode_record_token($v, $param['single_tab']);
+
+			if (!$tab_id) continue;
 			
-			$param = Utils_RecordBrowserCommon::decode_select_param($desc['param']);
+			list ($select_tab, $id) = $tab_id;
 			
-			if(!$param['array_id'] && $param['single_tab'] == '__COMMON__') return;
-			
-			if (!is_array($val)) $val = array($val);
-			
-			$ret = '';
-			foreach ($val as $v) {
-				$ret .= ($ret!=='')? '<br>': '';
-				
-				if ($param['single_tab'] == '__COMMON__') {
-					$array_id = $param['array_id'];
-					$path = explode('/', $v);
-					$tooltip = '';
-					$res = '';
-					if (count($path) > 1) {
-						$res .= Utils_CommonDataCommon::get_value($array_id . '/' . $path[0], true);
-						if (count($path) > 2) {
-							$res .= $commondata_sep . '...';
-							$tooltip = '';
-							$full_path = $array_id;
-							foreach ($path as $w) {
-								$full_path .= '/' . $w;
-								$tooltip .= ($tooltip? $commondata_sep: '').Utils_CommonDataCommon::get_value($full_path, true);
-							}
-						}
-						$res .= $commondata_sep;
-					}
-					$label = Utils_CommonDataCommon::get_value($array_id . '/' . $v, true);
-					if (!$label) continue;
-					$res .= $label;
-					$res = Utils_RecordBrowserCommon::no_wrap($res);
-					if ($tooltip) $res = '<span '.Utils_TooltipCommon::open_tag_attrs($tooltip, false) . '>' . $res . '</span>';
-				} else {
-					$tab_id = Utils_RecordBrowserCommon::decode_record_token($v, $param['single_tab']);
-					
-					if (!$tab_id) continue;
-					
-					list($select_tab, $id) = $tab_id;
-					
-					if ($param['cols']) {
-						$res = Utils_RecordBrowserCommon::create_linked_label($select_tab, $param['cols'], $id, $nolink);
-					} else {
-						$res = Utils_RecordBrowserCommon::create_default_linked_label($select_tab, $id, $nolink);
-					}
-				}
-				
-				$ret .= $res;
+			if ($param['cols']) {
+				$res = Utils_RecordBrowserCommon::create_linked_label($select_tab, $param['cols'], $id, $nolink);
+			} else {
+				$res = Utils_RecordBrowserCommon::create_default_linked_label($select_tab, $id, $nolink);
 			}
+				
+			$ret[] = $res;
 		}
 		
-		return $ret;
+		return implode('<br>', $ret);
 	}
 
 	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
@@ -515,8 +487,8 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		));
 	} 
 	
-	public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
-		$values = $this->decodeValue($record[$this->getId()] ?? '', false);
+	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+		$values = $this->decodeValue($values[$this->getArrayId()] ?? '', false);
 
 		if ($subfield = $crits->getKey()->getSubfield()) {
 			if ($tab2 = $this->getParam('single_tab')) {

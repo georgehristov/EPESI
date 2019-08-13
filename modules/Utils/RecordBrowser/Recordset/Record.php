@@ -46,9 +46,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
      * Called at the end of object construction. Override to do something with
      * object immediately after creation. Eg. create some calculated property.
      */
-    public function init() {
-        
-    }
+    public function init() {}
 
     /**
      * Get associated recordset object
@@ -60,6 +58,28 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     
     public function getId() {
         return $this[':id'];
+    }
+
+    public function getDisplayValues($record, $nolink = false, $customFieldIds = [], $quiet = true) {
+    	$customFieldIds = array_map([Utils_RecordBrowserCommon::class, 'get_field_id'], $customFieldIds);
+    	
+    	$hash = $this->getRecordset()->getHash();
+    	$fieldIds = $customFieldIds? array_intersect_key($hash, array_flip($customFieldIds)): $hash;
+    	
+    	$fields = array_intersect_key($this->getFields(), array_flip($fieldIds));
+
+    	if ($customFieldIds && !$quiet && count($customFieldIds) != count($fields)) {
+    		trigger_error('Unknown field names: ' . implode(', ', array_diff($customFieldIds, array_keys($fields))), E_USER_ERROR);
+    	}
+    		
+    	$ret = [];
+    	foreach ($fields as $field) {
+    		if (!isset($record[$field->getArrayId()])) continue;
+    		
+    		$ret[$field->getArrayId()] = $this->getValue($field, $nolink);
+    	}
+    	
+    	return $ret;
     }
     
     /**
@@ -138,8 +158,8 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
         
         if (!$this->getId()) {
             $rec = $recordset->addRecord($this->getValues());
-            if ($rec === null)
-                return false;
+            
+            if ($rec === null) return false;
             
             $this[':id'] = $rec[':id'];
             $this[':active'] = $rec[':active'];
@@ -152,8 +172,24 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
         return $recordset->updateRecord($this[':id'], $this->getValues());
     }
 
-    public function delete() {
-        return $this->setActive(false);
+    public function delete($permanent = false) {
+    	if (!$permanent) return $this->setActive(false);
+    	
+    	$values = $this->process('delete');
+    	
+    	if ($values === false) return false;
+    	
+    	$this->clearHistory();
+    	$this->deleteFavourite();
+    	$this->deleteRecent();
+    	
+    	DB::Execute('DELETE FROM ' . $this->getRecordset()->getDataTable() . ' WHERE id=%d', [$this->getId()]);
+
+    	if ($ret = DB::Affected_Rows() > 0) {
+    		$this->process('deleted');
+    	}
+    	
+    	return $ret;
     }
 
     public function restore() {
@@ -161,17 +197,136 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     }
 
     public function setActive($state = true) {
-        $state = (boolean) $state;
-        
-        $this[':active'] = $state;
-        
-        return $this->getRecordset()->set_active($this[':id'], $state);
+    	$state = $state ? 1 : 0;
+    	
+    	$this[':active'] = $state;
+    	
+    	$current = DB::GetOne('SELECT active FROM ' . $this->getRecordset()->getDataTable() . ' WHERE id=%d', [$this->getId()]);
+    	
+    	if ($current == $state) return false;
+    	
+    	$values = $this->process($state ? 'restore' : 'delete');
+    	
+    	if ($values === false) return false;
+    	
+    	@DB::Execute('UPDATE ' . $this->getRecordset()->getDataTable() . ' SET active=%d, indexed=0 WHERE id=%d', [$state, $this->getId()]);
+
+    	if ($this->getRecordset()->getProperty('search_include') > 0) {
+    		DB::Execute('DELETE FROM recordbrowser_search_index WHERE tab_id=%d AND record_id=%d', [$this->getRecordset()->getId(), $this->getId()]);
+    	}
+    	
+    	$editId = $this->logHistory($state ? 'RESTORED' : 'DELETED');
+
+    	//TODO: Georgi Hristov move this to processing callback
+    	Utils_WatchdogCommon::new_event($this->getRecordset()->getTab(), $this->getId(), ($state ? 'R' : 'D') . '_' . $editId);
+    	
+    	$this->process($state ? 'restored' : 'deleted');
+    	
+    	return true;
     }
     
     public function isActive() {
     	return $this[':active']?? true;
+    }    
+    
+    public function logHistory($oldValue) {
+    	$tab = $this->getRecordset()->getTab();
+    	
+    	DB::Execute('INSERT INTO ' . $tab . '_edit_history(edited_on, edited_by, ' . $tab . '_id) VALUES (%T,%d,%d)', [date('Y-m-d G:i:s'), Acl::get_user(), $this->getId()]);
+    	
+    	$edit_id = DB::Insert_ID($tab . '_edit_history', 'id');
+    	
+    	DB::Execute('INSERT INTO ' . $tab . '_edit_history_data(edit_id, field, old_value) VALUES (%d,%s,%s)', [$edit_id, 'id', $oldValue]);
+    	
+    	return $edit_id;
     }
+    
+    public function deleteRecent() {
+    	$tab = $this->getRecordset()->getTab();
+    	
+    	DB::Execute('DELETE FROM ' . $tab . '_recent WHERE ' . $tab . '_id = %d', [$this->getId()]);
+    	
+    	return DB::Affected_Rows();
+    }
+    
+    public function deleteFavourite() {
+    	$tab = $this->getRecordset()->getTab();
+    	
+    	DB::Execute('DELETE FROM ' . $tab . '_favorite WHERE ' . $tab . '_id = %d', [$this->getId()]);
+    	
+    	return DB::Affected_Rows();
+    }
+    
+    public function clearHistory() {
+    	$tab = $this->getRecordset()->getTab();
+    	
+    	DB::Execute('DELETE
+					FROM ' . $tab . '_edit_history_data
+					WHERE edit_id IN' .
+    			' (SELECT id FROM ' . $tab . '_edit_history WHERE ' . $tab . '_id = %d)', [$this->getId()]);
+    	
+    	DB::Execute('DELETE FROM ' . $tab . '_edit_history WHERE ' . $tab . '_id = %d', [$this->getId()]);
+    	
+    	return DB::Affected_Rows();
+    }    
+    
+    public function getRevision($revisionId) {
+    	$tab = $this->getRecordset()->getTab();
+    	
+    	$ret = $this->toArray();
+    	
+    	$result = DB::Execute('SELECT 
+									id, edited_on, edited_by 
+								FROM ' . 
+    								$tab . '_edit_history 
+								WHERE ' . 
+    								$tab . '_id=%d AND 
+									id>=%d 
+								ORDER BY 
+									edited_on DESC, id DESC', [$this->getId(), $revisionId]);
+    	
+    	while ($row = $result->FetchRow()) {
+    		$result2 = DB::Execute('SELECT * FROM '.$tab.'_edit_history_data WHERE edit_id=%d', [$row['id']]);
+    		
+    		while($row2 = $result2->FetchRow()) {    			
+    			$fieldId = $row2['field'];
+    			$oldValue = $row2['old_value'];
+    			
+    			if ($fieldId == 'id') {
+    				$ret[':active'] = ($oldValue != 'DELETED');
+    				
+    				continue;
+    			}
+    			
+    			if (!$this->getRecordset()->getHash($fieldId)) continue;
+    				
+    			$ret[$fieldId] = $oldValue;
+    		}
+    	}
+    	
+    	return $ret;
+    }  
+    
+    public function getTooltipData()
+    {
+    	if (!$this->isActive()) return [];
 
+    	$access = $this->getUserAccess('view');
+
+    	$data = [];
+    	foreach ($this->getFields() as $field) {
+    		if (!$field['tooltip'] || !$access[$field['id']]) continue;
+    			
+    		$data[$field->getLabel()] = $field->getDisplayValue($this, true);
+    	}
+    	
+    	return $data;
+    }
+    
+    public function getFields($order = 'position') {
+    	return $this->getRecordset()->getFields($order);
+    }
+    
     public function clone_data() {
         $c = clone $this;
         
@@ -215,13 +370,6 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
             trigger_error("get_html_record_info may be called only for saved records", E_USER_ERROR);
         
         return $this->getRecordset()->get_html_record_info($this->__records_id);
-    }
-
-    public function new_history($old_value) {
-        if (!$this->__records_id)
-            trigger_error("new_history may be called only for saved records", E_USER_ERROR);
-        
-        return $this->getRecordset()->new_record_history($this->__records_id,$old_value);
     }
 
     // ArrayAccess interface members

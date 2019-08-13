@@ -91,11 +91,13 @@ trait Utils_RecordBrowser_Recordset_Query_Crits_Trait_Components
     }
        
     /**
-     * @param Utils_RecordBrowser_Recordset $recordset
+     * @param string | Utils_RecordBrowser_Recordset $recordset
      * @return Utils_RecordBrowser_Recordset_Query
      */
-    public function getQuery(Utils_RecordBrowser_Recordset $recordset)
+    public function getQuery($recordset)
     {
+    	$recordset = Utils_RecordBrowser_Recordset::create($recordset);
+    	
     	$ret = $recordset->createQuery();
     	foreach ($this->getComponents(true) as $crits) {
     		$ret = Utils_RecordBrowser_Recordset_Query::merge($ret, $crits->getQuery($recordset), $this->getJunction());

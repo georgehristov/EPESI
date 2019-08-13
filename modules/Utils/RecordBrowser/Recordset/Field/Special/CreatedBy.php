@@ -9,6 +9,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedBy extends Utils_Record
 				'field' => _M('Created by'),
 				'type' => 'created_by',
 				'active' => true,
+				'visible' => false,
 				'export' => true,
 				'processing_order' => -800,
 		];

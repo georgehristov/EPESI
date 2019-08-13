@@ -102,4 +102,9 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Compound extends Utils_RecordBro
     {
     	return self::create(func_get_args(), true);
     }    
+    
+    public static function merge($critsA, $critsB, $or = false)
+    {
+    	return self::create([$critsA, $critsB], $or);
+    }    
 }

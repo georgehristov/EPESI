@@ -84,8 +84,8 @@ class Utils_RecordBrowser_Recordset_Query implements ArrayAccess
 		$sql = [];
 		$values = [];
 
-		if ($queryA->getTable() != $queryB->getTable()) {
-			trigger_error("Attempting to merge queries on different recordsets: {$queryA->getTable()} and {$queryB->getTable()}", E_USER_ERROR);
+		if ($queryA->getDataTable() != $queryB->getDataTable()) {
+			trigger_error("Attempting to merge queries on different recordsets: {$queryA->getDataTable()} and {$queryB->getDataTable()}", E_USER_ERROR);
 		}
 		
 		/**
@@ -99,17 +99,23 @@ class Utils_RecordBrowser_Recordset_Query implements ArrayAccess
 			$values = array_merge($values, $query->getValues());
 		}
 		
-		return $queryA->getRecordset()->createQuery(implode(" $junction ", array_filter($sql)), $values);
+		$sql = array_filter($sql);
+		
+		$multi = count($sql) > 1;
+
+		$sql = implode(" $junction ", $sql);
+
+		return $queryA->getRecordset()->createQuery($multi? '(' . $sql . ')': $sql, $values);
 	}
 	
 	public function getCountSql()
 	{
-		return 'SELECT COUNT(*) FROM ' . $this->getTable() . ' AS ' . $this->getTableAlias() . $this->getWhereSql();
+		return 'SELECT COUNT(*) FROM ' . $this->getDataTableWithAlias() . $this->getWhereSql();
 	}
 	
 	public function getSelectSql($order = [])
 	{
-		return 'SELECT ' . $this->getTableAlias() . '.* FROM ' . $this->getTable() . ' AS ' . $this->getTableAlias() . $this->getWhereSql() . $this->getOrderSql($order);
+		return 'SELECT ' . $this->getDataTableAlias() . '.* FROM ' . $this->getDataTableWithAlias() . $this->getWhereSql() . $this->getOrderSql($order);
 	}
 	
 	protected function getWhereSql()
@@ -119,14 +125,19 @@ class Utils_RecordBrowser_Recordset_Query implements ArrayAccess
 		return ($sql? ' WHERE ': '') . $sql;
 	}
 
-	protected function getTable() 
+	protected function getDataTable() 
 	{
-		return $this->getRecordset()->getTab() . '_data_1 ';
+		return $this->getRecordset()->getDataTable();
 	}
 	
-	protected function getTableAlias() 
+	protected function getDataTableAlias() 
 	{
-		return $this->getRecordset()->getTabAlias();
+		return $this->getRecordset()->getDataTableAlias();
+	}
+	
+	protected function getDataTableWithAlias() 
+	{
+		return $this->getRecordset()->getDataTableWithAlias();
 	}
 	
 	public function matchRecordset($recordset) 

@@ -39,14 +39,14 @@ class Utils_RecordBrowser_Recordset_Field_Special_EditedOn extends Utils_RecordB
 							FROM ' . 
 								$this->getTab().'_edit_history 
 							WHERE ' . 
-								$this->getTab().'_id=' . $this->getTabAlias().'.id) 
+								$this->getTab().'_id=' . $this->getRecordset()->getDataTableAlias().'.id) 
 				IS NOT NULL THEN (SELECT 
 									MAX(edited_on) 
 								FROM ' .
 									$this->getTab().'_edit_history 
 								WHERE ' . 
-									$this->getTab().'_id='.$this->getTabAlias().'.id) 
-				ELSE ' . $this->getTabAlias() . '.created_on END) ' . $direction;
+									$this->getTab().'_id='.$this->getRecordset()->getDataTableAlias().'.id) 
+				ELSE ' . $this->getRecordset()->getDataTableAlias() . '.created_on END) ' . $direction;
 	}
 	
 	public function processGet($values, $options = []) {

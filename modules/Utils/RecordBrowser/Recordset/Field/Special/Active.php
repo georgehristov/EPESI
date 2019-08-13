@@ -9,6 +9,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_Active extends Utils_RecordBro
 				'field' => _M('Active'),
 				'type' => 'active',
 				'active' => true,
+				'visible' => false,
 				'export' => true,
 				'processing_order' => -900,
 		];

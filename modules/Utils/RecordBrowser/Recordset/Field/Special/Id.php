@@ -13,6 +13,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_Id extends Utils_RecordBrowser
 				'field' => 'id',
 				'type' => 'id',
 				'active' => true,
+				'visible' => false,
 				'export' => true,
 				'processing_order' => -1000,
 		];

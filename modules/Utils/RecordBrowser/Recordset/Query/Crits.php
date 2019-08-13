@@ -11,8 +11,7 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     /**
      * Replace crits value to other value or disable crits that uses this value.
      *
-     * Object will be changed! Clone it before use if you'd like to hold
-     * original one.
+     * Object will be changed! Clone it before use if you'd like to hold original one.
      *
      * @param mixed $search
      * @param mixed $replace
@@ -30,7 +29,7 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     abstract function find($key);
     
     /**
-     * Validate the crit object
+     * Validate the values against the crit object
      * 
      * @param Utils_RecordBrowser_Recordset $recordset
      * @param array $values
@@ -56,9 +55,8 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
      * @param boolean $html
      */
     abstract public function toWords($recordset, $html = true);
-    
 
-    public static function registerPlaceholderCallback($callback)
+    final public static function registerPlaceholderCallback($callback)
     {
     	self::$placeholderCallbacks[] = $callback;
     }
@@ -68,11 +66,11 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
      *
      * Object will be cloned. Current object will not be changed.
      *
-     * @param bool $human_readable Use special value or it's human readable form
+     * @param bool $humanReadable Use special value or it's human readable form
      *
      * @return Utils_RecordBrowser_Recordset_Query_Crits New object with replaced values
      */
-    public function replacePlaceholders($humanReadable = false)
+    final public function replacePlaceholders($humanReadable = false)
     {
         /**
          * @var Utils_RecordBrowser_Recordset_Query_Crits $crits
@@ -87,7 +85,7 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
         return $crits;
     }
 
-    protected static function getPlaceholders($user = null)
+    final protected static function getPlaceholders($user = null)
     {
         static $cache = [];
         
@@ -111,6 +109,18 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
         }
         
         return $cache[$user];
+    }
+    
+    final public static function stripModifiers($key)
+    {
+    	return substr($key, strlen(self::parseModifiers($key)));
+    }
+    
+    final public static function parseModifiers($key)
+    {
+    	$result = preg_split( '/[a-zA-Z:_\[\]]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
+    	
+    	return $result? reset($result): '';
     }
         
     /**
@@ -141,18 +151,6 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
         return false;
     }
             
-    public static function stripModifiers($key)
-    {
-    	return substr($key, strlen(self::parseModifiers($key)));
-    }
-    
-    public static function parseModifiers($key)
-    {
-    	$result = preg_split( '/[a-zA-Z:_\[\]]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
-    	
-    	return $result? reset($result): '';
-    }
-    
     public static function __set_state($array)
     {
     	$crits = new static();

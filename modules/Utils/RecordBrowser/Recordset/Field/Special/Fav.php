@@ -23,7 +23,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_Fav extends Utils_RecordBrowse
 				FROM '.
 					$this->getTab().'_favorite 
 				WHERE '.
-					$this->getTab().'_id='.$this->getTabAlias().'.id AND 
+					$this->getTab().'_id='.$this->getRecordset()->getDataTableAlias().'.id AND 
 					user_id=' . Acl::get_user() . ') ' . $direction;
 	}
 	

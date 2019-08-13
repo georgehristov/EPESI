@@ -413,28 +413,27 @@ class Utils_RecordBrowser extends Module {
         if (!$this->disabled['quickjump']) $quickjump = $this->getRecordset()->getProperty('quickjump');
         else $quickjump = '';
 
-        $query_cols = array();
-        foreach($this->getRecordset()->getFields() as $field => $args) {
-            if ($field === 'id') continue;
-            if ((!$args['visible'] && (!isset($cols[$args['id']]) || $cols[$args['id']] === false))) continue;
-
-            $query_cols[] = $args['id'];
+        $visibleFields = $this->getRecordset()->getVisibleFields($cols);
+        
+        $query_cols = [];
+        foreach ($visibleFields as $field) {
+        	$query_cols[] = $field['id'];
             
             $disabled = [
             		'order' => $pdf || $this->force_order || $this->browse_mode =='recent',
-            		'quickjump' => $pdf || !$quickjump || $args['name']===$quickjump,
+            		'quickjump' => $pdf || !$quickjump || $field['name']===$quickjump,
             		'search' => $pdf || $this->disabled['search']
             ];
 
-            $arr = array_merge($args->getGridColumnOptions($this, $disabled), $this->more_table_properties[$args['id']]?? []);
+            $column = array_merge($field->getGridColumnOptions($this, $disabled), $this->more_table_properties[$field['id']]?? []);
             
-            if (isset($arr['quickjump'])) $arr['quickjump'] = '"~'.$arr['quickjump'];
+            if (isset($column['quickjump'])) $column['quickjump'] = '"~'.$column['quickjump'];
 			if ($pdf) {
-				$arr['attrs'] = 'style="border:1px solid black;font-weight:bold;text-align:center;color:white;background-color:gray"';
-				if (!isset($arr['width'])) $arr['width'] = 100;
-				if ($arr['width']==1) $arr['width'] = 100;
+				$column['attrs'] = 'style="border:1px solid black;font-weight:bold;text-align:center;color:white;background-color:gray"';
+				if (!isset($column['width'])) $column['width'] = 100;
+				if ($column['width']==1) $column['width'] = 100;
 			}
-            $table_columns[] = $arr;
+			$table_columns[] = $column;
         }
 		if ($pdf) {
 			$max = 0;
@@ -465,7 +464,7 @@ class Utils_RecordBrowser extends Module {
 		$gb->set_table_columns( $table_columns );
 		
 		if (!$pdf && $this->browse_mode != 'recent') {
-			$clean_order = array();
+			$clean_order = [];
 			foreach ($order as $k => $v) {
                 if ($k[0] == ':') {
                     $clean_order[$k] = $v;
@@ -795,9 +794,7 @@ class Utils_RecordBrowser extends Module {
 
 		self::$last_record = $this->record = $this->custom_defaults = $this->getRecordset()->process($this->custom_defaults, 'adding');
 
-		$visible_cols = $this->getRecordset()->getVisibleFields($cols);
-			
-		$this->prepare_view_entry_details($this->custom_defaults, 'add', null, $form, $visible_cols);
+		$this->prepare_view_entry_details($this->custom_defaults, 'add', null, $form, $visibleFields);
         $form->setDefaults($this->custom_defaults);
 
         if ($form->isSubmitted()) {
@@ -826,7 +823,7 @@ class Utils_RecordBrowser extends Module {
                 $row_data[] = '&nbsp;';
 
             $first = true;
-            foreach($visible_cols as $k => $v) {
+            foreach($visibleFields as $k => $v) {
                 if (isset($data[$k])) {
                     $row_data[] = array('value'=>$data[$k]['error'].$data[$k]['html'], 'overflow_box'=>false);
                     if ($first) eval_js('focus_on_field = "'.$k.'";');

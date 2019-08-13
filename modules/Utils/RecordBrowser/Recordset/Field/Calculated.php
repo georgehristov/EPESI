@@ -32,6 +32,10 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
 		return preg_match('/^[a-z]+(\([0-9]+\))?$/i',$this->getParam())!==0;
 	}
 	
+	public function getQueryId() {
+		return $this->isStored()? parent::getQueryId(): false;
+	}
+	
     public function getSqlOrder($direction) {
     	$param = explode('::', $this->getParam());
     	if (isset($param[1]) && $param[1] != '') {
@@ -41,7 +45,14 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
     		$first_col = explode('/', $first_col);
     		$data_col = isset($first_col[1]) ? $this->getFieldId($first_col[1]) : $this->getId();
     		$field_id2 = Utils_RecordBrowserCommon::get_field_id($first_col[0]);
-    		$val = '(SELECT rdt.f_'.$field_id2.' FROM '.$this->getTab().'_data_1 AS rd LEFT JOIN '.$tab2.'_data_1 AS rdt ON rdt.id=rd.f_'.$data_col.' WHERE '.$this->getRecordset()->getTabAlias().'.id=rd.id)';
+    		$val = '(SELECT 
+						rdt.f_'.$field_id2.' 
+					FROM ' . 
+						$this->getTab() . '_data_1 AS rd 
+						LEFT JOIN ' . $tab2 . '_data_1 AS rdt ON 
+							rdt.id=rd.f_' . $data_col.' 
+					WHERE ' . 
+    					$this->getRecordset()->getDataTableAlias() . '.id=rd.id)';
     	} else {
     		$val = $this->getQueryId();
     	}

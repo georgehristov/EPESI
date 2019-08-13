@@ -79,7 +79,7 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     		return $this->getRecordset()->createQuery("$field IS NULL OR $field=''");
     	}
     	
-    	if ($crit->getKey()->getSubfield() !== false) { // may be empty string for value lookup with field[]
+    	if ($crit->getKey()->getSubfield()) { // may be empty string for value lookup with field[]
     		$ret = Utils_CommonDataCommon::get_translated_array($this['select']['array_id']);
     		$val_regex = $operator == DB::like() ?
     		'/' . preg_quote($value, '/') . '/i' :
@@ -95,7 +95,7 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     	if ($this->multiselect) {
     		$operator = DB::like();
     	}
-    	
+
     	$sql = [];
     	$vals = [];
     	foreach ($final_vals as $val) {
@@ -105,7 +105,7 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     		}
     		$vals[] = $val;
     	}
-
+    	
     	return $this->getRecordset()->createQuery(implode(' OR ', $sql), $vals);
     }
     

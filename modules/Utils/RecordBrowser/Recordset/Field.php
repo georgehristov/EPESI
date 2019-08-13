@@ -42,7 +42,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	
 	public function __construct($recordset, $desc = null) {
 		$this->setRecordset($recordset);
-
+		
 		$this->setDesc($desc);
 	}
 		
@@ -116,7 +116,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 				$ret['commondata_array'] = $param['array_id'];
 			}
 		}
-			
+
 		return array_merge($desc, $ret);
 	}
 		
@@ -190,7 +190,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	}
 	
 	public function getQueryId() {
-		return implode('.', array_filter([$this->getRecordset()->getTabAlias(), $this->getSqlId()]));
+		return implode('.', array_filter([$this->getRecordset()->getDataTableAlias(), $this->getSqlId()]));
 	}
 		
 	/**
@@ -352,6 +352,14 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return false;
 	}
 	
+	public final function getDisplayValue($record, $nolink=false) {
+		return $this->display($record, $nolink);
+	}
+	
+	public final function getValue($record) {
+		return $record[$this->getArrayId()];
+	}
+	
 	/**
 	 * @param Utils_RecordBrowser_Recordset_Record $record
 	 * @param boolean $nolink
@@ -404,15 +412,15 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	}
 	
 	public function getName() {
-		return $this->name;
+		return $this['name'];
 	}
 	
 	public function getId() {
-		return $this->id;
+		return $this['id'];
 	}
 	
 	public function getPkey() {
-		return $this->pkey;
+		return $this['pkey'];
 	}
 	
 	public function getType() {
@@ -691,7 +699,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 				'template' => null,
 				'display_callback' => null,
 				'QFfield_callback' => null,
-				'tab' => null,
+				
 				//---> deprecated - backward compatibility
 				'ref_table' => null,
 				'ref_field' => null,
@@ -701,7 +709,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 				//<--- deprecated
 		];
 		
-		$desc = array_intersect_key(array_merge($descDefault,$this->resolveDesc($desc)), $descDefault);
+		$desc = array_intersect_key(array_merge($descDefault, $this->resolveDesc($desc)), $descDefault);
 		
 		$desc['param'] = $this->decodeParam($desc['param']);
 				
@@ -714,7 +722,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	}
 	
 	public static function desc($tab = null, $name = null) {
-		return $tab && $name? DB::GetRow("SELECT * FROM {$tab}_field  WHERE field=%s", [$name]): [];
+		return $tab && $name? DB::GetRow("SELECT * FROM {$tab}_field WHERE field=%s", [$name]): [];
 	}
 	
 	// Interface methods

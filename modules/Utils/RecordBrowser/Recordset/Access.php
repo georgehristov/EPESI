@@ -9,12 +9,17 @@ class Utils_RecordBrowser_Recordset_Access
 	protected $values;
 	protected $ruleCrits;
 	protected $activeGrantRules;
-	protected static $ruleCritsCache = [];
-	protected static $ruleBlockedFieldsCache = [];
+	protected $accessFields;
 	
 	public static function create($recordset, $action, $values = null)
 	{
-		return new self($recordset, $action, $values);
+		static $cache;
+		
+		$access = new static($recordset, $action, $values);
+		
+		$key = $access->getSignature();
+				
+		return $cache[$key] = $cache[$key]?? $access;
 	}
 	
 	public function __construct($recordset, $action, $values = null)
@@ -24,37 +29,9 @@ class Utils_RecordBrowser_Recordset_Access
 		$this->setValues($values);
 	}
 
-	protected function setRecordset($recordset) 
+	public function getSignature() 
 	{
-		$this->recordset = Utils_RecordBrowser_Recordset::create($recordset);
-		
-		return $this;
-	}
-	
-	public function getRecordset() 
-	{
-		return $this->recordset;
-	}
-	
-	public function getTab()
-	{
-		return $this->getRecordset()->getTab();
-	}
-
-	protected function setAction($action) 
-	{
-		$this->action = $action;
-		
-		return $this;
-	}
-
-	protected function setValues($values) 
-	{
-		if ($values) {
-			$this->values = is_object($values)? $values->toArray(): $values;
-		}
-		
-		return $this;
+		return md5(serialize([$this->getTab(), $this->getAction(), $this->getValues()]));
 	}
 	
 	public function getUserAccess($adminMode = false) 
@@ -64,12 +41,12 @@ class Utils_RecordBrowser_Recordset_Access
 
 		if ($this->isFullDeny()) return false;
 		
-		if ($this->action === 'browse') return $this->getCritsRaw() !== null ? true: false;
-
+		if ($this->hasAction('browse')) return $this->getCritsRaw() !== null ? true: false;
+		
 		if ($this->getActiveGrantRules() === false) return false;
 		
-		if ($this->action === 'delete') return true;
-		
+		if ($this->hasAction('delete')) return true;
+
 		return $this->getAccessFields();
 	}
 	
@@ -90,22 +67,22 @@ class Utils_RecordBrowser_Recordset_Access
 		
 		$ruleCrits = $this->getRuleCrits();
 		
-		foreach ( $ruleCrits as $ruleId => $c ) {
+		foreach ( $ruleCrits as $ruleId => $crits ) {
 			if ($ruleId === 'restrict') continue;
 			
-			if (! $c instanceof Utils_RecordBrowser_Recordset_Query_Crits) continue;
+			if (! $crits instanceof Utils_RecordBrowser_Recordset_Query_Crits) continue;
 			
 			// if crit is empty, then we have access to all records
-			if ($c->isEmpty()) $ret = $c;
+			if ($crits->isEmpty()) $ret = $crits;
 			
 			if ($ret instanceof Utils_RecordBrowser_Recordset_Query_Crits && $ret->isEmpty()) continue;
 			
-			$ret = Utils_RecordBrowserCommon::merge_crits($ret, $c, true);
+			$ret = Utils_RecordBrowser_Crits::merge($ret, $crits, true);
 		}
 		
 		// if there is any access granted - limit it based on restrict crits
 		if ($ret !== null && $ruleCrits['restrict'] instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
-			$ret = Utils_RecordBrowserCommon::merge_crits($ret, $ruleCrits['restrict']);
+			$ret = Utils_RecordBrowser_Crits::merge($ret, $ruleCrits['restrict']);
 		}
 		
 		return $ret;
@@ -113,10 +90,15 @@ class Utils_RecordBrowser_Recordset_Access
 	
 	protected function getRecordInactiveAccess() 
 	{
-		if(!Utils_RecordBrowserCommon::is_record_active($this->values) && ($this->action=='edit' || $this->action=='delete'))
+		if (!Utils_RecordBrowserCommon::is_record_active($this->getValues()) && ($this->hasAction('edit', 'delete')))
 			return false;
 			
 		return true;
+	}
+	
+	public function hasAction($action, $_ = null) 
+	{
+		return in_array($this->getAction(), array_filter(func_get_args()));
 	}
 	
 	public function isFullGrant() 
@@ -134,58 +116,73 @@ class Utils_RecordBrowser_Recordset_Access
 	
 	public function getRuleCrits()
 	{
-		if (isset($this->ruleCrits)) return $this->ruleCrits;
-		
-		$cache_key = "{$this->getTab()}__USER_" . Acl::get_user();
-		
-		$action = ($this->action == 'browse')? 'view': $this->action;
-		
-		if (!isset(self::$ruleCritsCache[$cache_key])) {
-			Utils_RecordBrowserCommon::check_table_name($this->getTab());
-			
-			$user_clearance = Acl::get_clearance();
-			
-			$r = DB::Execute('SELECT * FROM '.$this->getTab().'_access AS acs WHERE NOT EXISTS (SELECT * FROM '.$this->getTab().'_access_clearance WHERE rule_id=acs.id AND '.implode(' AND ',array_fill(0, count($user_clearance), 'clearance!=%s')).')', array_values($user_clearance));
-			
-			$ruleCrits = [
-					'view' => [],
-					'edit' => [],
-					'delete' => [],
-					'add' => [],
-					'print' => [],
-					'export' => [],
-					'selection' => []
-			];
-			
-			while ($row = $r->FetchRow())
-				$ruleCrits[$row['action']][$row['id']] = $this->parseAccessCrits($row['crits']);
-				
-			self::$ruleCritsCache[$cache_key] = $ruleCrits;
-		}
-		
-		$ruleCrits = self::$ruleCritsCache[$cache_key];
-		
-		return $this->ruleCrits = $ruleCrits[$action] + $this->callCustomAccessCallbacks();
-	}
-	
-	public function parseAccessCrits($str, $human_readable = false) 
-	{
-		$ret = Utils_RecordBrowserCommon::unserialize_crits($str);
+		if ($this->ruleCrits) return $this->ruleCrits;
 
-		if (!is_object($ret)) {
-			$ret = Utils_RecordBrowser_Crits::create($ret);
-		}
-		return $ret->replacePlaceholders($human_readable);
+		return $this->ruleCrits = $this->getGuiRuleCrits() + $this->getCallbackRuleCrits();
 	}
 	
-	protected function callCustomAccessCallbacks()
+	public function getGuiRuleCrits() {
+		static $cache;
+		
+		$key = $this->getTab() . '__' . Acl::get_user();
+		
+		if (!isset($cache[$key])) {
+			$userClearance = Acl::get_clearance();
+			
+			$result = DB::Execute('SELECT
+								*
+							FROM ' .
+					$this->getTab() . '_access AS acs
+							WHERE
+								NOT EXISTS (SELECT
+												*
+											FROM ' .
+					$this->getTab() . '_access_clearance
+											WHERE
+												rule_id=acs.id AND '.
+					implode(' AND ',array_fill(0, count($userClearance), 'clearance!=%s')).')', array_values($userClearance));
+			
+			$ruleCrits = array_fill_keys([
+					'view',
+					'edit',
+					'delete',
+					'add',
+					'print',
+					'export',
+					'selection'
+			], []);
+			
+			while ($row = $result->FetchRow()) {
+				$ruleCrits[$row['action']][$row['id']] = $this->parseAccessCrits($row['crits']);
+			}
+			
+			$cache[$key] = $ruleCrits;
+		}
+		
+		$action = $this->hasAction('browse')? 'view': $this->getAction();
+		
+		return $cache[$key][$action];
+	}
+	
+	public static function parseAccessCrits($str, $humanReadable = false) 
+	{
+		$result = Utils_RecordBrowserCommon::unserialize_crits($str);
+
+		$crits = is_object($result)? $result: Utils_RecordBrowser_Crits::create($result);
+		
+		return $crits->replacePlaceholders($humanReadable);
+	}
+	
+	protected function getCallbackRuleCrits()
 	{
 		$ret = [
 				'grant' => null,
 				'restrict' => null
 		];
-		foreach ( Utils_RecordBrowserCommon::get_custom_access_callbacks($this->getTab()) as $callback ) {
-			$callbackCrits = call_user_func($callback, $this->action, $this->values, $this->recordset);
+		foreach ( $this->getCallbacks() as $callback ) {
+			if (!is_callable($callback)) continue;
+			
+			$callbackCrits = call_user_func($callback, $this->getAction(), $this->getValues(), $this->getTab());
 			
 			if (is_bool($callbackCrits)) {
 				$ret[$callbackCrits ? 'grant': 'restrict'] = true;
@@ -201,59 +198,87 @@ class Utils_RecordBrowser_Recordset_Access
 			];
 			
 			if (is_array($callbackCrits) && (isset($callbackCrits['grant']) || isset($callbackCrits['restrict']))) {
-				// if restrict rules are not set make sure the restrict crits are clean
-				if (! isset($callbackCrits['restrict'])) $callbackCrits['restrict'] = null;
+				// if restrict rules are not set make sure the restrict crits are clean				
+				$callbackCrits['restrict'] = $callbackCrits['restrict']?? null;
+				
 				$crits = array_merge($crits, $callbackCrits);
 			}
 			
-			if (! $crits['grant']) $crits['grant'] = null;
+			$crits['grant'] = $crits['grant']?: null;
 			
 			foreach ( $crits as $mode => $c ) {
 				$c = is_array($c) ? Utils_RecordBrowser_Crits::create($c): $c;
 				
-				if ($c instanceof Utils_RecordBrowser_Recordset_Query_Crits_Compound) $ret[$mode] = ($ret[$mode] !== null) ? Utils_RecordBrowserCommon::merge_crits($ret[$mode], $c, $mode === 'grant'): $c;
-				elseif (is_bool($c)) $ret[$mode] = $c;
+				if ($c instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
+					$ret[$mode] = ($ret[$mode] !== null) ? Utils_RecordBrowser_Crits::merge($ret[$mode], $c, $mode === 'grant'): $c;
+				}
+				elseif (is_bool($c)) {
+					$ret[$mode] = $c;
+				}
 			}
 		}
 		
 		return $ret;
 	}
+	
+	public function getCallbacks($force = false)
+	{
+		static $cache = [];
+		
+		if (!$cache || $force) {
+			$cache = [];
+			$rows = DB::GetAll('SELECT * FROM recordbrowser_access_methods ORDER BY priority DESC');
+			foreach ($rows as $row) {
+				$cache[$row['tab']] = $cache[$row['tab']]?? [];
 
+				$cache[$row['tab']][] = $row['func'];
+			}
+		}
+		
+		return $cache[$this->getTab()]?? [];
+	}
+	
 	protected function getActiveGrantRules() 
 	{
-		if (isset($this->activeGrantRules)) return $this->activeGrantRules;
+		if ($this->activeGrantRules) return $this->activeGrantRules;
 		
-		if ($this->isFullDeny()) return false;
+		if ($this->isFullDeny()) return $this->activeGrantRules = false;
 		
-		if ($this->isFullGrant()) return ['grant'];
+		if ($this->isFullGrant()) return $this->activeGrantRules = ['grant'];
 		
 		$ruleCrits = $this->getRuleCrits();
 		
-		if ($this->values != null && $this->action !== 'add' && $ruleCrits['restrict'] instanceof Utils_RecordBrowser_Recordset_Query_Crits && ! Utils_RecordBrowserCommon::check_record_against_crits($this->getRecordset(), $this->values, $ruleCrits['restrict'])) {
-			return false;
+		if (! $this->validateValues($ruleCrits['restrict'])) {
+			return $this->activeGrantRules = false;
 		}
 		
 		$ret = [];
-		foreach ( $ruleCrits as $rule_id => $c ) {
-			if ($rule_id === 'restrict') continue;
+		foreach ( $ruleCrits as $ruleId => $crits ) {
+			if ($ruleId === 'restrict') continue;
 			
-			if (! $c instanceof Utils_RecordBrowser_Recordset_Query_Crits) continue;
+			if (! $crits instanceof Utils_RecordBrowser_Recordset_Query_Crits) continue;
 			
-			if ($this->values != null && ! Utils_RecordBrowserCommon::check_record_against_crits($this->getTab(), $this->values, $c)) continue;
+			if (! $this->validateValues($crits)) continue;
 			
-			$ret[] = $rule_id;
+			$ret[] = $ruleId;
 		}
 		
 		return $this->activeGrantRules = $ret ?: false;
 	}
 	
+	protected function validateValues($crits) 
+	{
+		if (! $this->getValues() || $this->hasAction('add') || ! $crits instanceof Utils_RecordBrowser_Recordset_Query_Crits ) return true;
+		
+		return $crits->validate($this->getRecordset(), $this->getValues());
+	}
+	
 	protected function getAccessFields() 
 	{
-		$grant_rule_ids = $this->getActiveGrantRules();
+		if ($this->accessFields) return $this->accessFields;
 		
 		$access_rule_blocked_fields = [];
-		
-		foreach ( $grant_rule_ids as $rule_id ) {
+		foreach ( $this->getActiveGrantRules() as $rule_id ) {
 			$access_rule_blocked_fields[$rule_id] = $this->getRuleBlockedFields($rule_id);
 		}
 
@@ -263,24 +288,70 @@ class Utils_RecordBrowser_Recordset_Access
 
 		$blocked_field_access = $blocked_fields? array_fill_keys($blocked_fields, false): [];
 		
-		return array_merge($full_field_access, $blocked_field_access);
+		return $this->accessFields = array_merge($full_field_access, $blocked_field_access);
 	}
 	
 	protected function getRuleBlockedFields($ruleId) 
 	{
+		static $cache;
+		
 		if (!is_numeric($ruleId)) return [];
 		
-		if (!isset(self::$ruleBlockedFieldsCache[$this->getTab()])) {
-			$r = DB::Execute('SELECT * FROM '.$this->getTab().'_access_fields');
+		if (!isset($cache[$this->getTab()])) {
+			$result = DB::Execute('SELECT * FROM ' . $this->getTab() . '_access_fields');
 			
 			$fields = [];
-			while ($row = $r->FetchRow()) {
+			while ($row = $result->FetchRow()) {
 				$fields[$row['rule_id']][] = $row['block_field'];
 			}
 			
-			self::$ruleBlockedFieldsCache[$this->getTab()] = $fields;
+			$cache[$this->getTab()] = $fields;
 		}
 		
-		return isset(self::$ruleBlockedFieldsCache[$this->getTab()][$ruleId])? self::$ruleBlockedFieldsCache[$this->getTab()][$ruleId]: [];
+		return $cache[$this->getTab()][$ruleId]?? [];
 	}
+	
+	protected function setRecordset($recordset)
+	{
+		$this->recordset = Utils_RecordBrowser_Recordset::create($recordset);
+		
+		return $this;
+	}
+	
+	public function getRecordset()
+	{
+		return $this->recordset;
+	}
+	
+	public function getTab()
+	{
+		return $this->getRecordset()->getTab();
+	}
+	
+	protected function setAction($action)
+	{
+		$this->action = $action;
+		
+		return $this;
+	}
+	
+	protected function setValues($values)
+	{
+		if ($values) {
+			$this->values = is_object($values)? $values->toArray(): $values;
+		}
+		
+		return $this;
+	}
+	
+	protected function getAction()
+	{
+		return $this->action;
+	}
+	
+	protected function getValues()
+	{
+		return $this->values;
+	}
+	
 }

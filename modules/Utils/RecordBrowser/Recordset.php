@@ -209,12 +209,10 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	
 	public function getVisibleFields($custom = []) {
 		$ret = [];
-		foreach($this->getRecordset()->getFields() as $field){
-			if (!$field['visible'] && (!isset($custom[$field['id']]) || $custom[$field['id']] === false)) continue;
+		foreach($this->getFields() as $field) {
+			if (!$field['visible'] && !($custom[$field['id']]?? false)) continue;
 			
-			if (isset($custom[$field['id']]) && $custom[$field['id']] === false) continue;
-			
-			$ret[$field['id']] = true;
+			$ret[$field['id']] = $field;
 		}
 		
 		return $ret;
@@ -244,6 +242,8 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	 * @return Utils_RecordBrowser_Recordset_Field
 	 */
 	public function getField($name, $quiet = false) {
+		if (is_object($name)) return $name;
+		
 		$fields = $this->getFields();
 		
 		$fieldName = isset($fields[$name])? $name: ($this->getHash($name)?: $this->getKeyHash($name));
@@ -297,6 +297,10 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	
 	public function getUserValuesAccess($action, $values, $admin = false) {
 		return Utils_RecordBrowser_Recordset_Access::create($this, $action, $values)->getUserAccess($admin);
+	}
+	
+	public function getAccessCrits($action, $values = null) {
+		return Utils_RecordBrowser_Recordset_Access::create($this, $action, $values)->getCrits();
 	}
 	
 	public function getProcessMethods() {
@@ -523,7 +527,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		]);
 		
 		$query = $this->getQuery($crits);
-		var_dump($query->getSelectSql($order));
+		var_dump($query->getSelectSql($order), $query->getValues());
 		return DB::SelectLimit($query->getSelectSql($order), $limit['numrows'], $limit['offset'], $query->getValues());
 	}
 	
@@ -537,22 +541,22 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		static $cache;
 		static $stack = [];
 				
-		$key = $this->getTab() . '__' . $this->getTabAlias() . '__' . md5(serialize($crits)) . '__' . $admin . '__' . Acl::get_user();
+		$key = md5(serialize([$this->getTab(), $this->getDataTableAlias(), $crits, $admin, Acl::get_user()]));
 		
 		if (isset($cache[$key])) return $cache[$key];
 		
 		$crits = $crits? [Utils_RecordBrowser_Crits::create($crits)]: [];
 			
-		$accessCrits = ($admin || in_array($this->getTab(), $stack))?: Utils_RecordBrowserCommon::get_access_crits($this->getTab(), 'browse');
+		$accessCrits = ($admin || in_array($this->getTab(), $stack))?: $this->getAccessCrits('browse');
 		if ($accessCrits == false) return [];
 		elseif ($accessCrits !== true) {
 			$crits[] = $accessCrits;
 		}
 		var_dump($accessCrits->toWords($this));
 		if ($admin) {
-			$adminCrits = str_replace('<tab>', $this->getTabAlias(), Utils_RecordBrowserCommon::$admin_filter);
+			$adminCrits = str_replace('<tab>', $this->getDataTableAlias(), Utils_RecordBrowserCommon::$admin_filter);
 		} else {
-			$adminCrits = $this->getTabAlias() . '.active=1';
+			$adminCrits = $this->getDataTableAlias() . '.active=1';
 		}
 		
 		$crits[] = Utils_RecordBrowser_Recordset_Query_Crits_RawSQL::create($adminCrits);
@@ -562,6 +566,18 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		array_pop($stack);
 		
 		return $cache[$key];
+	}
+	
+	public function getDataTable()
+	{
+		return $this->getTable('data');
+	}
+	
+	public function getDataTableWithAlias()
+	{
+		$alias = $this->getDataTableAlias();
+		
+		return $this->getDataTable() . ($alias? ' AS ' . $alias: '');
 	}
 	
 	/**
@@ -579,16 +595,35 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		return $this;
 	}
-	public function getTabAlias() {
+	public function getDataTableAlias() {
 		return $this->tabAlias;
 	}
 
-	public function setTabAlias($tabAlias) {
+	public function setDataTableAlias($tabAlias) {
 		$this->tabAlias = $tabAlias;
 		
 		return $this;
 	}
+	
+	public function getTable($key) {
+		$tab = $this->getTab();
+		
+		$tables = [
+				'callback' => $tab . '_callback',
+				'recent' => $tab . '_recent',
+				'favorite' => $tab . '_favorite',
+				'history_data' => $tab . '_edit_history_data',
+				'history' => $tab . '_edit_history',
+				'fields' => $tab . '_field',
+				'data' => $tab . '_data_1'
+		];
+		
+		return $tables[$key]?? '';
+	}
 
+	public function getId() {
+		return $this->getProperty('id');
+	}
 }
 
 

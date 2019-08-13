@@ -39,8 +39,8 @@ class Utils_RecordBrowser_Recordset_Field_Special_VisitedOn extends Utils_Record
 				FROM '.
 					$this->getTab().'_recent 
 				WHERE '.
-					$this->getTab().'_id='.$this->getTabAlias().'.id AND 
-					user_id='.Acl::get_user().') ' . $direction;
+					$this->getTab().'_id=' . $this->getRecordset()->getDataTableAlias().' . id AND 
+					user_id='.Acl::get_user() . ') ' . $direction;
 	}
 	
 	public function processGet($values, $options = []) {

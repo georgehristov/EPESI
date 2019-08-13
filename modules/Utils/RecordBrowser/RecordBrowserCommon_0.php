@@ -350,7 +350,6 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 			$settings[0][] = array('name'=>$row['tab'].'_show_filters','label'=>'','type'=>'hidden','default'=>0);
         }
         $final_settings = array();
-        $subscribe_settings = array();
         $final_settings[] = array('name'=>'add_in_table_shown','label'=>__('Quick new record - show by default'),'type'=>'checkbox','default'=>0);
         $final_settings[] = array('name'=>'hide_empty','label'=>__('Hide empty fields'),'type'=>'checkbox','default'=>0);
         $final_settings[] = array('name'=>'enable_autocomplete','label'=>__('Enable autocomplete in select/multiselect at'),'type'=>'select','default'=>50, 'values'=>array(0=>__('Always'), 20=>__('%s records', array(20)), 50=>__('%s records', array(50)), 100=>__('%s records', array(100))));
@@ -410,8 +409,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return $ret;
     }
     public static function is_active($tab, $id) {
-        self::init($tab);
-        return DB::GetOne("SELECT active FROM {$tab}_data_1 WHERE id=%d", [$id]);
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->isActive();
     }
     public static function admin_caption() {
 		return array('label'=>__('Record Browser'), 'section'=>__('Data'));
@@ -1212,7 +1210,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      * @return array
      */
     public static function build_query($recordset, $crits = null, $admin = false, $order = array(), $tabAlias = 'r') {
-    	$query = Utils_RecordBrowser_Recordset::create($recordset)->setTabAlias($tabAlias)->getQuery($crits, $admin);
+    	$query = Utils_RecordBrowser_Recordset::create($recordset)->setDataTableAlias($tabAlias)->getQuery($crits, $admin);
     	
     	return [
     			'sql' => $query->getSql() . $query->getOrderSql($order),
@@ -1301,7 +1299,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     	
     	$param = $field->getParam();
 
-       	if($param['single_tab']=='__COMMON__') return $record[$field->getId()];
+       	if ($param['single_tab']=='__COMMON__') return $record[$field->getId()];
             
        	$ret = true;
        	$field_is_empty = true;
@@ -1708,28 +1706,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function set_active($tab, $id, $state)
     {
-        self::check_table_name($tab);
-        $current = DB::GetOne('SELECT active FROM ' . $tab . '_data_1 WHERE id=%d', array($id));
-        if ($current == ($state ? 1 : 0)) {
-            return false;
-        }
-        $record = self::get_record($tab, $id);
-        if (!$record) {
-            return false;
-        }
-        $values = self::record_processing($tab, $record, $state ? 'restore' : 'delete');
-        if ($values === false) {
-            return false;
-        }
-        @DB::Execute('UPDATE ' . $tab . '_data_1 SET active=%d,indexed=0 WHERE id=%d', array($state ? 1 : 0, $id));
-        $tab_prop = DB::GetRow('SELECT id,search_include FROM recordbrowser_table_properties WHERE tab=%s',array($tab));
-        if ($tab_prop['search_include'] > 0) {
-            DB::Execute('DELETE FROM recordbrowser_search_index WHERE tab_id=%d AND record_id=%d',array($tab_prop['id'],$id));
-        }
-        $edit_id = self::new_record_history($tab,$id,$state ? 'RESTORED' : 'DELETED');
-        Utils_WatchdogCommon::new_event($tab, $id, ($state ? 'R' : 'D').'_'.$edit_id);
-        self::record_processing($tab, $record, $state ? 'restored' : 'deleted');
-        return true;
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->setActive($state);
     }
 
     /**
@@ -1737,33 +1714,13 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      *
      * @param string $tab   Recordset identifier
      * @param int    $id    Record ID
-     * @param bool   $perma Delete permanently with all edit history
+     * @param bool   $permanent Delete permanently with all edit history
      *
      * @return bool True when record has been deleted, false otherwise
      */
-    public static function delete_record($tab, $id, $perma = false)
+    public static function delete_record($tab, $id, $permanent = false)
     {
-        $ret = false;
-        if (!$perma) {
-            $ret = self::set_active($tab, $id, false);
-        } elseif (self::check_table_name($tab)) {
-            $record = self::get_record($tab, $id);
-            $values = self::record_processing($tab, $record, 'delete');
-            if ($values === false) {
-                $ret = false;
-            } else {
-                self::delete_record_history($tab, $id);
-                self::delete_from_favorite($tab, $id);
-                self::delete_from_recent($tab, $id);
-
-                DB::Execute('DELETE FROM ' . $tab . '_data_1 WHERE id=%d', array($id));
-                $ret = DB::Affected_Rows() > 0;
-                if ($ret) {
-                    self::record_processing($tab, $record, 'deleted');
-                }
-            }
-        }
-        return $ret;
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->delete($permanent);
     }
 
     /**
@@ -1776,12 +1733,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_record_history($tab, $id)
     {
-        $sql = 'DELETE FROM ' . $tab . '_edit_history_data WHERE edit_id IN' .
-               ' (SELECT id FROM ' . $tab . '_edit_history WHERE ' . $tab . '_id = %d)';
-        DB::Execute($sql, array($id));
-        $sql = 'DELETE FROM ' . $tab . '_edit_history WHERE ' . $tab . '_id = %d';
-        DB::Execute($sql, array($id));
-        return DB::Affected_Rows();
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->clearHistory();
     }
 
     /**
@@ -1794,9 +1746,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_from_favorite($tab, $id)
     {
-        $sql = 'DELETE FROM ' . $tab . '_favorite WHERE ' . $tab . '_id = %d';
-        DB::Execute($sql, array($id));
-        return DB::Affected_Rows();
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->deleteFavourite();
     }
 
     /**
@@ -1809,9 +1759,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_from_recent($tab, $id)
     {
-        $sql = 'DELETE FROM ' . $tab . '_recent WHERE ' . $tab . '_id = %d';
-        DB::Execute($sql, array($id));
-        return DB::Affected_Rows();
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->deleteRecent();
     }
 
     /**
@@ -1825,6 +1773,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     public static function restore_record($tab, $id) {
         return self::set_active($tab, $id, true);
     }
+    
     public static function no_wrap($s) {
         $content_no_wrap = $s;
         preg_match_all('/>([^\<\>]*)</', $s, $match);
@@ -1979,7 +1928,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     	
     	$record = self::get_record($tab, $id);
     	$fields = array_map(array('Utils_RecordBrowserCommon', 'get_field_id'), $cols);
-    	$record_vals = self::get_record_vals($tab, $record, true, $fields, false);
+    	$record_vals = self::get_record_vals($tab, $record, true, $fields, false);var_dump('testtest2', $record_vals);
     	if (empty($record_vals)) return '';
     	
     	$vals = array();
@@ -2050,6 +1999,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     	return call_user_func_array($tooltip_create_callback, $tooltip_create_args);
     }
     public static function get_record_vals($tab, $record, $nolink=false, $fields = array(), $silent = true){
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($record)->getDisplayValues($record, $nolink, $fields, $silent);
+    	
     	if (is_numeric($record)) $record = self::get_record($tab, $record);
     	if (!is_array($record)) return array();
     	
@@ -2139,20 +2090,9 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 
     public static function get_record_tooltip_data($tab, $record_id)
     {
-        $record = self::get_record($tab, $record_id);
-        if (!$record[':active']) {
-            return array();
-        }
-        $cols = self::init($tab);
-        $access = self::get_access($tab, 'view', $record);
-        $data = array();
-        foreach ($cols as $desc) {
-            if ($desc['tooltip'] && $access[$desc['id']]) {
-                $data[_V($desc['name'])] = self::get_val($tab, $desc['id'], $record, true);
-            }
-        }
-        return $data;
+    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($record_id)->getTooltipData();
     }
+    
     public static function default_record_tooltip($tab, $record_id)
     {
         $data = self::get_record_tooltip_data($tab, $record_id);
@@ -2239,17 +2179,46 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         }
         return Utils_BBCodeCommon::create_bbcode($tag, $record_id, $text, $msg);
     }
-    public static function applet_settings($some_more = array()) {
-        $some_more = array_merge($some_more,array(
-            array('label'=>__('Actions'),'name'=>'actions_header','type'=>'header'),
-            array('label'=>__('Info'),'name'=>'actions_info','type'=>'checkbox','default'=>true),
-            array('label'=>__('View'),'name'=>'actions_view','type'=>'checkbox','default'=>false),
-            array('label'=>__('Edit'),'name'=>'actions_edit','type'=>'checkbox','default'=>true),
-            array('label'=>__('Delete'),'name'=>'actions_delete','type'=>'checkbox','default'=>false),
-            array('label'=>__('View edit history'),'name'=>'actions_history','type'=>'checkbox','default'=>false),
-        ));
-        return $some_more;
-    }
+    
+    public static function applet_settings($some_more = []) {
+		return array_merge($some_more, [
+				[
+						'label' => __('Actions'),
+						'name' => 'actions_header',
+						'type' => 'header'
+				],
+				[
+						'label' => __('Info'),
+						'name' => 'actions_info',
+						'type' => 'checkbox',
+						'default' => true
+				],
+				[
+						'label' => __('View'),
+						'name' => 'actions_view',
+						'type' => 'checkbox',
+						'default' => false
+				],
+				[
+						'label' => __('Edit'),
+						'name' => 'actions_edit',
+						'type' => 'checkbox',
+						'default' => true
+				],
+				[
+						'label' => __('Delete'),
+						'name' => 'actions_delete',
+						'type' => 'checkbox',
+						'default' => false
+				],
+				[
+						'label' => __('View edit history'),
+						'name' => 'actions_history',
+						'type' => 'checkbox',
+						'default' => false
+				]
+		]);
+	}
 
 	/**
 	 *	Returns older version of te record.
@@ -2258,23 +2227,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	 *	@param Record ID - ID of the record
 	 *	@param Revision ID - RB will backtrace all edits on that record down-to and including edit with this ID
 	 */
-	public static function get_record_revision($tab, $id, $rev_id) {
-		self::init($tab);
-		$r = self::get_record($tab, $id);
-		$ret = DB::Execute('SELECT id, edited_on, edited_by FROM '.$tab.'_edit_history WHERE '.$tab.'_id=%d AND id>=%d ORDER BY edited_on DESC, id DESC',array($id, $rev_id));
-		while ($row = $ret->FetchRow()) {
-			$ret2 = DB::Execute('SELECT * FROM '.$tab.'_edit_history_data WHERE edit_id=%d',array($row['id']));
-			while($row2 = $ret2->FetchRow()) {
-				$k = $row2['field'];
-				$v = $row2['old_value'];
-				if ($k=='id') $r['active'] = ($v!='DELETED');
-				else {
-					if (!isset(self::$hash[$k])) continue;
-					$r[$k] = $v;
-				}
-			}
-		}
-		return $r;
+    public static function get_record_revision($tab, $id, $revisionId) {
+		return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->getRevision($revisionId);
 	}
 	
 	public static function get_edit_details($tab, $rid, $edit_id,$details=true) {
