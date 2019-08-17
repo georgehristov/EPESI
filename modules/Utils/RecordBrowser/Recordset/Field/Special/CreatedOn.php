@@ -47,8 +47,8 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedOn extends Utils_Record
 		];	
 	}	
 	
-	public function defaultValue($mode) {
-		return $mode == 'add'? date('Y-m-d H:i:s'): null;
+	public function defaultValue() {
+		return date('Y-m-d H:i:s');
 	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
@@ -77,5 +77,16 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedOn extends Utils_Record
 	
 	public function getArrayId() {
 		return ':' . $this->getId();
+	}
+	
+	/**
+	 * Update the time of actual adding the record
+	 * {@inheritDoc}
+	 * @see Utils_RecordBrowser_Recordset_Field::processAdd()
+	 */
+	public function processAdd($values, $options = []) {
+		$values[$this->getId()] =  $this->defaultValue();
+		
+		return $values;
 	}
 }

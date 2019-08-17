@@ -28,6 +28,10 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
 		return $this->isStored()? $values: false;
 	}
 	
+	public function processEdit($values) {
+		return $this->isStored()? $values: false;
+	}
+	
 	public function isStored() {
 		return preg_match('/^[a-z]+(\([0-9]+\))?$/i',$this->getParam())!==0;
 	}

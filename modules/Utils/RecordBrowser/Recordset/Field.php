@@ -1,5 +1,6 @@
 <?php
 
+
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAccess, Countable {
@@ -12,6 +13,10 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	protected static $registry = [];
 	protected static $special = [];
 	
+	
+	
+	// *********** Override below methods to achive desired functionality in child fields *********** //
+	
 	public static function typeKey() {
 		return static::class;
 	}
@@ -20,13 +25,268 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return false;
 	}
 	
+	public static function paramElements() {
+		return [];
+	}
+	
+	public function isRequiredPossible() {
+		return true;
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return [
+				'name' => _V($this->getLabel()),
+				'order' => true,
+				'quickjump' => false,
+				'search' => true,
+				'search_type' => 'text',
+				'wrapmode' => false,
+				'width' => 100
+		];
+	}
+	
+	public function getActualDbType() {
+		return Utils_RecordBrowserCommon::actual_db_type($this->getType(), $this->getParam());
+	}
+	
+	public function getSqlType() {
+		return Utils_RecordBrowserCommon::get_sql_type($this->getType());
+	}
+	
+	/**
+	 * The id to use when assigning value in the record array
+	 *
+	 * @return string
+	 */
+	public function getArrayId() {
+		return $this->getId();
+	}
+	
+	public function getSqlId() {
+		return 'f_' . $this->getId();
+	}
+	
+	public function getSqlOrder($direction) {
+		return ' ' . $this->getQueryId() . ' ' . $direction;
+	}
+	
+	public function getQueryId() {
+		return implode('.', array_filter([$this->getRecordset()->getDataTableAlias(), $this->getSqlId()]));
+	}
+	
+	public static function decodeValue($value, $options = []) {
+		return $value;
+	}
+	
+	public static function encodeValue($value, $options = []) {
+		return $value;
+	}
+	
+	public static function decodeParam($param) {
+		return $param;
+	}
+	
+	public static function encodeParam($param) {
+		return $param;
+	}
+	
+	public static function formatParam($param) {
+		return '';
+	}
+	
+	public function getAjaxTooltipOpts() {
+		return [];
+	}
+	
+	public static function getAjaxTooltip($opts) {
+		return __('No additional information');
+	}
+	
+	/**
+	 * The default value for the field type
+	 * The default value is used for a dirty record where no value is set
+	 *
+	 * @return string
+	 */
+	public function defaultValue() {
+		return '';
+	}
+
+	public function isEmpty($record) {
+		if (is_array($record[$this->getId()])) return empty($record[$this->getId()]);
+		
+		return $record[$this->getId()]=='';
+	}
+	
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+		
+		$field = $this->getQueryId();
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+		
+		$vals = [];
+		if ($operator == DB::like() && ($value == '%' || $value == '%%')) {
+			$sql = 'true';
+		}
+		elseif ($value === '' || is_null($value)) {
+			$sql_null = stripos($operator, '!') !== false? 'NOT': '';
+			
+			$sql = "$field IS $sql_null NULL OR $field $operator ''";
+		}
+		else {
+			$sql = "$field $operator %s AND $field IS NOT NULL";
+			$vals[] = $value;
+		}
+		
+		return $this->getRecordset()->createQuery($sql, $vals);
+	}
+	
+	public function getRawSQLQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+		
+		return $this->getRecordset()->createQuery($this->getQueryId() . " $operator $value");
+	}
+		
+	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+		$value = $this->decodeValue($values[$this->getId()] ?? '', false);
+		$crit_value = $crits->getValue()->getValue();
+		
+		$result = false;
+		if (is_array($value)) {
+			$result = $crit_value? in_array($crit_value, $value): empty($value);
+			
+			if ($crits->getOperator()->getOperator() == '!=') $result = !$result;
+		}
+		else switch ($crits->getOperator()->getOperator()) {
+			case '>': $result = ($value > $crit_value); break;
+			case '>=': $result = ($value >= $crit_value); break;
+			case '<': $result = ($value < $crit_value); break;
+			case '<=': $result = ($value <= $crit_value); break;
+			case '!=': $result = ($value != $crit_value); break;
+			case '=': $result = ($value == $crit_value); break;
+			case 'LIKE': $result = $this->checkLikeMatch($value, $crit_value); break;
+			case 'NOT LIKE': $result = !$this->checkLikeMatch($value, $crit_value); break;
+		}
+		
+		return $result;
+	}
+	
+	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {}
+	
+	public static function createQFfieldStatic($form, $fieldId, $label, $mode, $default, $field, $rb_obj) {
+		if ($mode === 'add' || $mode === 'edit') return false;
+			
+		$fieldId = $field->getId();			
+			
+		$value = Utils_RecordBrowserCommon::get_val($field->getTab(), $fieldId, $rb_obj->record);			
+			
+		$form->addElement('static', $fieldId, $field->getQFfieldLabel(), $value, ['id' => $fieldId]);
+			
+		return true;
+	}
+	
+	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
+		return is_array($record[$desc['id']])? implode('<br />', $record[$desc['id']]): $record[$desc['id']];
+	}
+
+	/**
+	 * Default processing method distributes the work to individual methods having the 'mode' as suffix
+	 * This way fields can have common default e.g processAdd control and different processAdded control
+	 *
+	 * @param array $values
+	 * @param string $mode
+	 * @param array $options
+	 * @return array
+	 */
+	public function process($values, $mode, $options = []) {
+		$callback = [$this, 'process' . ucfirst($mode)];
+		
+		return is_callable($callback)? call_user_func($callback, $values, $options): $values;
+	}
+	
+	/**
+	 * Prepare the values for saving to the database from the field type perspective
+	 * Return true if value should be included for inserting and false otherwise
+	 *
+	 * @param array $values - the values of the processed record
+	 * @param array $options - varios options can be passed on to this Method
+	 * @return array - modified record values to be written in the database
+	 *
+	 */
+	public function processAdd($values, $options = []) {
+		$value = $this->encodeValue($values[$this->getId()]);
+		
+		$values[$this->getId()] =  is_bool($value)? ($value? 1: 0): $value;
+		
+		return $values;
+	}
+	
+	public function processAdded($values, $options = []) {
+		$values[$this->getId()] =  $this->decodeValue($values[$this->getId()], $options);
+		
+		return $values;
+	}
+	
+	public function processEdit($values, $existing = []) {
+		if ($this->encodeValue($existing[$this->getId()]) === $this->encodeValue($values[$this->getId()])) return false;
+		
+		return $values;
+	}
+	
+	/**
+	 * Process values retrieved from database
+	 * $values has sqlId keys
+	 *
+	 * @param array $values
+	 * @return array
+	 */
+	public function processGet($values, $options = []) {
+		$sqlId = $this->getSqlId();
+		
+		$value = $sqlId && isset($values[$sqlId])? $values[$sqlId]: $this->defaultValue();
+		
+		return [
+				$this->getArrayId() => $this->decodeValue($value, $options)
+		];
+	}
+	
+	/**
+	 * Returns the raw field description
+	 * By default it is read from the database for the associated recordset
+	 * Method can be overridden in child classes to define a static description (like for special fields)
+	 *
+	 * @param string $tab
+	 * @param string $name
+	 * @return array|mixed
+	 */
+	public static function desc($tab = null, $name = null) {
+		return $tab && $name? DB::GetRow("SELECT * FROM {$tab}_field WHERE field=%s", [$name]): [];
+	}
+	
+	/**
+	 * Returns definitions of all associated query builder fields in the form of array
+	 * NULL if no associated query builder fields
+	 *
+	 * @return array | null
+	 */
+	public function queryBuilderFilters() {}
+	
+	
+	
+	// *********** Final methods for the field class *********** //
+	
 	/**
 	 * @param string|Utils_RecordBrowser_Recordset
 	 * @param string|array $name_or_desc
 	 * @param boolean $admin
 	 * @return Utils_RecordBrowser_Recordset_Field
 	 */
-	public static function create($recordset, $name_or_desc = null, $admin = false) {
+	final public static function create($recordset, $name_or_desc = null, $admin = false) {
 		$recordset = Utils_RecordBrowser_Recordset::create($recordset);
 		
 		$desc = !is_array($name_or_desc)? static::desc($recordset->getTab(), $name_or_desc): $name_or_desc;
@@ -46,11 +306,11 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		$this->setDesc($desc);
 	}
 		
-	public static function resolveClass($desc) {
+	final public static function resolveClass($desc) {
 		return self::$registry[$desc['type']]?? (self::$special[$desc['type']]?? static::class);
 	}
 	
-	public static function getRegistrySelectList() {
+	final public static function getRegistrySelectList() {
 		$ret = [];
 		
 		foreach (self::$registry as $type => $class) {
@@ -59,16 +319,12 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		
 		return array_filter($ret);
 	}
-		
-	public static function paramElements() {
-		return [];
-	}
-		
+			
 	/**
 	 * @param array $desc
 	 * @return array
 	 */
-	public static function resolveDesc($desc) {
+	final public static function resolveDesc($desc) {
 		foreach (array_keys($desc) as $id)
 			if (is_numeric($id)) unset($desc[$id]);
 			
@@ -83,7 +339,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	 * @param array $desc
 	 * @return array
 	 */
-	public static function resolveDescBackwardsCompatible($desc) {
+	final public static function resolveDescBackwardsCompatible($desc) {
 		$ret = [];
 		$commondata = $desc['type'] == 'commondata';
 		if (($desc['type']=='select' || $desc['type']=='multiselect') && $desc['param']) {
@@ -120,7 +376,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return array_merge($desc, $ret);
 	}
 		
-	public static final function register($type_or_list = null) {
+	final public static function register($type_or_list = null) {
 		$type_or_list = $type_or_list?: static::class;
 		
 		foreach (is_array($type_or_list)? $type_or_list: [$type_or_list] as $class) {
@@ -141,27 +397,23 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		}
 	}
 	
-	public static final function getSpecial() {
+	final public static function getSpecial() {
 		return self::$special;
 	}
 	
-	public final function isVisible() {
-		return $this->visible;
+	final public function isVisible() {
+		return $this['visible'];
 	}
 	
-	public final function isRequired() {
-		return $this->required;
+	final public function isRequired() {
+		return $this['required'];
 	}
 	
-	public function isRequiredPossible() {
-		return true;
-	}
-	
-	public static final function getFieldId($field_name) {
+	final public static function getFieldId($field_name) {
 		return Utils_RecordBrowserCommon::get_field_id($field_name);
 	}
 	
-	public final function getGridColumnOptions(Utils_RecordBrowser $recordBrowser, $disabled = []) {
+	final public function getGridColumnOptions(Utils_RecordBrowser $recordBrowser, $disabled = []) {
 		$column = array_filter(array_diff_key($this->gridColumnOptions($recordBrowser), array_filter($disabled)));
 		
 		$options = array_fill_keys(['quickjump', 'order', 'search'], $this->getId());
@@ -169,108 +421,15 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return array_replace($column, array_intersect_key($options, $column));
 	}
 	
-	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
-		return [
-				'name' => _V($this->getLabel()),
-				'order' => true,
-				'quickjump' => false,
-				'search' => true,
-				'search_type' => 'text',
-				'wrapmode' => false,
-				'width' => 100
-		];
-	}
-	
-	public function getActualDbType() {
-		return Utils_RecordBrowserCommon::actual_db_type($this->getType(), $this->getParam());
-	}
-	
-	public function getSqlType() {
-		return Utils_RecordBrowserCommon::get_sql_type($this->getType());
-	}
-	
-	public function getQueryId() {
-		return implode('.', array_filter([$this->getRecordset()->getDataTableAlias(), $this->getSqlId()]));
-	}
-		
-	/**
-	 * The id to use when assigning value in the record array
-	 *
-	 * @return string
-	 */
-	public function getArrayId() {
-		return $this->getId();
-	}	
-	
-	public function getSqlId() {
-		return 'f_' . $this->getId();
-	}
-
-	public function getSqlOrder($direction) {
-		return ' ' . $this->getQueryId() . ' ' . $direction;
-	}
-	
-	public function getLabel() {
+	final public function getLabel() {
 		return _V($this->getCaption()?: $this->getName());
 	}
 	
-	public function getQFfieldLabel() {
+	final public function getQFfieldLabel() {
 		return $this->getTooltip('<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>');
 	}
 	
-	public static function decodeValue($value, $options = []) {
-		return $value;
-	}
-	
-	public static function encodeValue($value, $options = []) {
-		return $value;
-	}
-	
-	public static function decodeParam($param) {
-		return $param;
-	}
-	
-	public static function encodeParam($param) {
-		return $param;
-	}
-	
-	public static function formatParam($param) {
-		return '';
-	}
-	
-	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
-	{
-		if ($crit->getValue()->isRawSql()) {
-			return $this->getRawSQLQuerySection($crit);
-		}
-		
-		$field = $this->getQueryId();
-		$operator = $crit->getSQLOperator();
-		$value = $crit->getSQLValue();
-		
-		$vals = [];
-		if ($operator == DB::like() && ($value == '%' || $value == '%%')) {
-			$sql = 'true';
-		} elseif (!$value) {
-			$sql_null = stripos($operator, '!') !== false? 'NOT': '';
-			
-			$sql = "$field IS $sql_null NULL OR $field $operator ''";
-		} else {
-			$sql = "$field $operator %s AND $field IS NOT NULL";
-			$vals[] = $value;
-		}
-		
-		return $this->getRecordset()->createQuery($sql, $vals);
-	}
-	
-	public function getRawSQLQuerySection(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit) {
-		$operator = $crit->getSQLOperator();
-		$value = $crit->getSQLValue();
-		
-		return $this->getRecordset()->createQuery($this->getQueryId() . " $operator $value");
-	}
-	
-	public final function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj) {
+	final public function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj) {
 		if ($mode == 'view' && Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(),'hide_empty') && $this->isEmpty($record)) {
 			eval_js('var e=jq("#_'.$this->getId().'__data");if(e.length)e.closest("tr").hide();');
 		}
@@ -292,31 +451,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		}
 	}
 	
-	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
-		$value = $this->decodeValue($values[$this->getId()] ?? '', false);
-		$crit_value = $crits->getValue()->getValue();
-		
-		$result = false;
-		if (is_array($value)) {
-			$result = $crit_value? in_array($crit_value, $value): empty($value);
-
-			if ($crits->getOperator()->getOperator() == '!=') $result = !$result;
-		}
-		else switch ($crits->getOperator()->getOperator()) {
-			case '>': $result = ($value > $crit_value); break;
-			case '>=': $result = ($value >= $crit_value); break;
-			case '<': $result = ($value < $crit_value); break;
-			case '<=': $result = ($value <= $crit_value); break;
-			case '!=': $result = ($value != $crit_value); break;
-			case '=': $result = ($value == $crit_value); break;
-			case 'LIKE': $result = $this->checkLikeMatch($value, $crit_value); break;
-			case 'NOT LIKE': $result = !$this->checkLikeMatch($value, $crit_value); break;
-		}
-
-		return $result;
-	}
-	
-	protected final static function checkLikeMatch($value, $pattern, $ignoreCase = true)
+	final protected static function checkLikeMatch($value, $pattern, $ignoreCase = true)
 	{
 		$pattern = preg_quote($pattern);
 		$pattern = str_replace(['_', '%', '/'], ['.', '.*', '\/'], $pattern);
@@ -325,13 +460,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return preg_match($pattern, $value) > 0;
 	}
 	
-	public function isEmpty($record) {
-		if (is_array($record[$this->getId()])) return empty($record[$this->getId()]);
-		
-		return $record[$this->getId()]=='';
-	}
-	
-	public function callQFfieldCallback($form, $mode, $default, $rb_obj) {
+	final public function callQFfieldCallback($form, $mode, $default, $rb_obj) {
 		$callback = is_callable($this->QFfield_callback)? $this->QFfield_callback: [$this, 'defaultQFfieldCallback'];
 		
 		if (!is_callable($callback)) return;
@@ -339,24 +468,11 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		$callback($form, $this->getId(), $this->getQFfieldLabel(), $mode, $default, $this, $rb_obj, []);
 	}
 	
-	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {}
-		
-	public static function createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj) {
-		if ($mode !== 'add' && $mode !== 'edit') {
-			$field = $desc->getId();
-			
-			$value = Utils_RecordBrowserCommon::get_val($desc->getTab(), $field, $rb_obj->record, false, $desc);
-			$form->addElement('static', $field, $desc->getQFfieldLabel(), $value, ['id' => $field]);
-			return true;
-		}
-		return false;
-	}
-	
-	public final function getDisplayValue($record, $nolink=false) {
+	final public function getDisplayValue($record, $nolink=false) {
 		return $this->display($record, $nolink);
 	}
 	
-	public final function getValue($record) {
+	final public function getValue($record) {
 		return $record[$this->getArrayId()];
 	}
 	
@@ -365,11 +481,11 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	 * @param boolean $nolink
 	 * @return string
 	 *  */
-	public final function display($record, $nolink=false) {
+	final public function display($record, $nolink=false) {
 		static $recurrence = [];
 
 		if(!isset($record['id'])) $record['id'] = null;
-		if (!isset($record[$this['id']])) trigger_error($this['id'].' - unknown field for record '.print_r($record->toArray(), true), E_USER_ERROR);
+		if (!isset($record[$this['id']])) trigger_error($this['id'].' - unknown field for record '.print_r($record, true), E_USER_ERROR);
 		
 		$val = $record[$this['id']];
 		
@@ -389,11 +505,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return $ret;
 	}
 	
-	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
-		return is_array($record[$desc['id']])? implode('<br />', $record[$desc['id']]): $record[$desc['id']];
-	}
-	
-	public final function getTooltip($label = null) {
+	final public function getTooltip($label = null) {
 		$label = $label?: $this->getLabel();
 		
 		if(strpos($label,'Utils_Tooltip')!==false) return $label;
@@ -402,279 +514,8 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		array_unshift($args, $this->getType());
 		return Utils_TooltipCommon::ajax_create($label, [static::class, 'getAjaxTooltip'], [$this->getAjaxTooltipOpts()]);
 	}
-	
-	public function getAjaxTooltipOpts() {
-		return [];
-	}
-	
-	public static function getAjaxTooltip($opts) {
-		return __('No additional information');
-	}
-	
-	public function getName() {
-		return $this['name'];
-	}
-	
-	public function getId() {
-		return $this['id'];
-	}
-	
-	public function getPkey() {
-		return $this['pkey'];
-	}
-	
-	public function getType() {
-		return $this->type;
-	}
-	
-	public function getVisible() {
-		return $this->visible;
-	}
-	
-	public function getRequired() {
-		return $this->required;
-	}
-	
-	public function getExtra() {
-		return $this->extra;
-	}
-	
-	public function getActive() {
-		return $this->active;
-	}
-	
-	public function getExport() {
-		return $this->export;
-	}
-	
-	// 	public function getTooltip() {
-	// 		return $this->tooltip;
-	// 	}
-	
-	public function getPosition() {
-		return $this->position;
-	}
-	
-	public function getProcessingOrder() {
-		return $this->processing_order;
-	}
-	
-	public function getFilter() {
-		return $this->filter;
-	}
-	
-	public function getStyle() {
-		return $this->style;
-	}
-	
-	public function getParam($key = null) {
-		return $key? ($this->param[$key]?? null): $this->param;
-	}
-	
-	public function getHelp() {
-		return $this->help;
-	}
-	
-	public function getTemplate() {
-		return $this->template;
-	}
-	
-	public function getDisplayCallback() {
-		return $this->display_callback;
-	}
-	
-	public function getQFfieldCallback() {
-		return $this->QFfield_callback;
-	}
-	
-	public function getTab() {
-		return $this->getRecordset()->getTab();
-	}
-	
-	public function setName($name) {
-		$this->name = $name;
-		
-		return $this;
-	}
-	
-	public function setId($id) {
-		$this->id = $id;
-		
-		return $this;
-	}
-	
-	public function setPkey($pkey) {
-		$this->pkey = $pkey;
-		
-		return $this;
-	}
-	
-	public function setType($type) {
-		$this->type = $type;
-		
-		return $this;
-	}
-	
-	public function setVisible($visible) {
-		$this->visible = $visible;
-		
-		return $this;
-	}
-	
-	public function setRequired($required = true) {
-		$this->required = $required;
-		
-		return $this;
-	}
-	
-	public function setExtra($extra) {
-		$this->extra = $extra;
-		
-		return $this;
-	}
-	
-	public function setActive($active) {
-		$this->active = $active;
-		
-		return $this;
-	}
-	
-	public function setExport($export) {
-		$this->export = $export;
-		
-		return $this;
-	}
-	
-	public function setTooltip($tooltip) {
-		$this->tooltip = $tooltip;
-		
-		return $this;
-	}
-	
-	public function setPosition($position) {
-		$this->position = $position;
-		
-		return $this;
-	}
-	
-	public function setProcessingOrder($processing_order) {
-		$this->processing_order = $processing_order;
-		
-		return $this;
-	}
-	
-	public function setFilter($filter) {
-		$this->filter = $filter;
-		
-		return $this;
-	}
-	
-	public function setStyle($style) {
-		$this->style = $style;
-		
-		return $this;
-	}
-	
-	public function setParam($param) {
-		$this->param = $param;
-		
-		return $this;
-	}
-	
-	public function setHelp($help) {
-		$this->help = $help;
-		
-		return $this;
-	}
-	
-	public function setTemplate($template) {
-		$this->template = $template;
-		
-		return $this;
-	}
-	
-	public function setDisplay_callback($display_callback) {
-		$this->display_callback = $display_callback;
-		
-		return $this;
-	}
-	
-	public function setQFfield_callback($QFfield_callback) {
-		$this->QFfield_callback = $QFfield_callback;
-		
-		return $this;
-	}
-	
-	public function getCaption() {
-		return $this->caption;
-	}
-	
-	public function setCaption($caption) {
-		$this->caption = $caption;
-		
-		return $this;
-	}
-	
-	public function defaultValue($mode) {
-		return '';
-	}
-	
-	public function process($values, $mode, $options = []) {
-		$callback = [$this, 'process' . ucfirst($mode)];
 
-		return is_callable($callback)? call_user_func($callback, $values, $options): $values;
-	}
-	
-	/**
-	 * Prepare the field value for saving to the database
-	 * Return true if value should be included for inserting and false otherwise
-	 */
-	public function processAdd($values, $options = []) {
-		$value = $this->encodeValue($values[$this->getId()]);
-		
-		$values[$this->getId()] =  is_bool($value)? ($value? 1: 0): $value;
-		
-		return $values;
-	}
-	
-	public function processAdded($values, $options = []) {
-		$values[$this->getId()] =  $this->decodeValue($values[$this->getId()], $options);
-		
-		return $values;
-	}
-	
-	/**
-	 * Process values retrieved from database
-	 * $values has sqlId keys
-	 * 
-	 * @param array $values
-	 * @return array
-	 */
-	public function processGet($values, $options = []) {
-		$sqlId = $this->getSqlId();
-
-		$value = $sqlId && isset($values[$sqlId])? $values[$sqlId]: $this->defaultValue('view');
-				
-		return [
-				$this->getArrayId() => $this->decodeValue($value, $options)
-		];	
-	}
-	
-	public function getFormElement() {
-		return $this->formElement;
-	}
-	
-	public function getRecordset() {
-		return $this->recordset;
-	}
-
-	protected function setRecordset($recordset) {
-		$this->recordset = Utils_RecordBrowser_Recordset::create($recordset);
-		
-		return $this;
-	}
-	
-	protected function setDesc($desc) {
+	final protected function setDesc($desc) {
 		$desc = is_string($desc)? $this->desc($this->getRecordset()->getTab(), $desc): $desc;
 
 		$descDefault = [
@@ -721,36 +562,143 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return $this;
 	}
 	
-	public static function desc($tab = null, $name = null) {
-		return $tab && $name? DB::GetRow("SELECT * FROM {$tab}_field WHERE field=%s", [$name]): [];
-	}
 	
-	// Interface methods
-	public function count() {
+	
+	// *********** Interface methods *********** //
+	final public function count() {
 		return count($this->desc);
 	}
 	
-	public function offsetExists($offset) {
+	final public function offsetExists($offset) {
 		return array_key_exists($offset, $this->desc);
 	}
 	
-	public function offsetGet($offset) {
+	final public function offsetGet($offset) {
 		return $this->desc[$offset]?? null;
 	}
 	
-	public function offsetSet($offset, $value) {
+	final public function offsetSet($offset, $value) {
 		$this->desc[$offset] = $value;
 	}
 	
-	public function offsetUnset($offset) {
+	final public function offsetUnset($offset) {
 		unset($this->desc[$offset]);
 	}
 	
-	public function getIterator() {
+	final public function getIterator() {
 		return new ArrayIterator($this->desc);
 	}
 	
-	public function __get($property) { 
+	final public function __get($property) { 
 		return $this[$property]?? null; 
+	}
+	
+	final public function __call($name, $args) {
+		if (substr($name, 0, 3) != 'get') return;
+			
+		$key = strtolower(substr($name, 3));
+		
+		return $this[$key]?? null; 
+	}
+	
+	
+	
+	// *********** Getters and setters *********** //
+	public function getRecordset() {
+		return $this->recordset;
+	}
+	
+	protected function setRecordset($recordset) {
+		$this->recordset = Utils_RecordBrowser_Recordset::create($recordset);
+		
+		return $this;
+	}
+	
+	public function getFormElement() {
+		return $this->formElement;
+	}	
+	
+	public function getName() {
+		return $this['name'];
+	}
+	
+	public function getId() {
+		return $this['id'];
+	}
+	
+	public function getPkey() {
+		return $this['pkey'];
+	}
+	
+	public function getType() {
+		return $this['type'];
+	}
+	
+	public function getVisible() {
+		return $this['visible'];
+	}
+	
+	public function getRequired() {
+		return $this['required'];
+	}
+	
+	public function getExtra() {
+		return $this['extra'];
+	}
+	
+	public function getActive() {
+		return $this['active'];
+	}
+	
+	public function getExport() {
+		return $this['export'];
+	}
+	
+	// 	public function getTooltip() {
+	// 		return $this->tooltip;
+	// 	}
+	
+	public function getPosition() {
+		return $this['position'];
+	}
+	
+	public function getProcessingOrder() {
+		return $this['processing_order'];
+	}
+	
+	public function getFilter() {
+		return $this['filter'];
+	}
+	
+	public function getStyle() {
+		return $this['style'];
+	}
+	
+	public function getParam($key = null) {
+		return $key? ($this['param'][$key]?? null): $this['param'];
+	}
+	
+	public function getHelp() {
+		return $this['help'];
+	}
+	
+	public function getTemplate() {
+		return $this['template'];
+	}
+	
+	public function getDisplayCallback() {
+		return $this['display_callback'];
+	}
+	
+	public function getQFfieldCallback() {
+		return $this['QFfield_callback'];
+	}
+	
+	public function getTab() {
+		return $this->getRecordset()->getTab();
+	}
+	
+	public function getCaption() {
+		return $this['caption'];
 	}
 }

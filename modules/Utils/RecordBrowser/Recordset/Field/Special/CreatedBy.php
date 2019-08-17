@@ -15,7 +15,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedBy extends Utils_Record
 		];
 	}
 	
-	public function defaultValue($mode) {
+	public function defaultValue() {
 		return Acl::get_user();
 	}
 	

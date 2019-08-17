@@ -33,6 +33,34 @@ class Utils_RecordBrowser_Recordset_Field_File extends Utils_RecordBrowser_Recor
 		return $values;
 	}
 	
+	public function processEdit($values, $existing = []) {
+		$files = $this->decodeValue($values[$this->getId()]);
+
+		if ($this['param']['max_files'] && count($files) > $this['param']['max_files']) {
+			throw new Exception('Too many files in field ' . $this->getId());
+		}
+		
+		$filestorageIds = Utils_FileStorageCommon::add_files($files, "rb:{$this->getTab()}/{$values[':id']}/{$this['pkey']}");
+		
+		$values[$this->getId()] = $filestorageIds;
+		
+		// Delete files not present in the field right now
+		$old = $existing[$this->getId()];
+		
+		sort($old);
+		
+		if ($old == $filestorageIds) return false;
+		
+		foreach ( $existing[$this->getId()] as $file ) {
+			if (! in_array($file, $filestorageIds)) {
+				// delete file
+				Utils_FileStorageCommon::delete($file);
+			}
+		}
+		
+		return $values;
+	}
+	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
 		$labels = [];
 		$inline_nodes = [];
@@ -88,5 +116,5 @@ class Utils_RecordBrowser_Recordset_Field_File extends Utils_RecordBrowser_Recor
 			$dropzoneField->set_accepted_files($desc['param']['accepted_files']);
 		}
 		$dropzoneField->add_to_form($form, $desc->getId(), $desc->getQFfieldLabel());
-	}   
+	}
 }

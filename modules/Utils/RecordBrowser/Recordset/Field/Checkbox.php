@@ -28,7 +28,7 @@ class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_R
     	return $value? 1: 0;
     }
     
-    public function defaultValue($mode) {
+    public function defaultValue() {
     	return 0;
     }
     

@@ -168,9 +168,7 @@ class Utils_RecordBrowser_Recordset_Access
 	{
 		$result = Utils_RecordBrowserCommon::unserialize_crits($str);
 
-		$crits = is_object($result)? $result: Utils_RecordBrowser_Crits::create($result);
-		
-		return $crits->replacePlaceholders($humanReadable);
+		return is_object($result)? $result: Utils_RecordBrowser_Crits::create($result);
 	}
 	
 	protected function getCallbackRuleCrits()

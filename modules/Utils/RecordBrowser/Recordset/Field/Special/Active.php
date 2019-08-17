@@ -15,7 +15,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_Active extends Utils_RecordBro
 		];
 	}
 	
-	public function defaultValue($mode) {
+	public function defaultValue() {
 		return 1;
 	}
 	

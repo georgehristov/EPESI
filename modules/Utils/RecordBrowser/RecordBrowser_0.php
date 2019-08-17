@@ -311,8 +311,7 @@ class Utils_RecordBrowser extends Module {
 
         ob_start();
         $this->show_data($this->crits, $cols, array_merge($def_order, $this->default_order));
-        $table = ob_get_contents();
-        ob_end_clean();
+        $table = ob_get_clean();
 
         $theme->assign('table', $table);
         if (!$this->disabled['headline']) $theme->assign('caption', _V($this->caption).($this->additional_caption?' - '.$this->additional_caption:'').($this->get_jump_to_id_button()));
@@ -359,7 +358,6 @@ class Utils_RecordBrowser extends Module {
             if ($clone_result!='canceled') return;
         }
         if ($this->check_for_jump()) return;
-        
         Utils_RecordBrowserCommon::$cols_order = $this->col_order;
         
         if ($this->getRecordset()->getUserAccess('browse') === false) {
@@ -371,7 +369,7 @@ class Utils_RecordBrowser extends Module {
         if (!Base_AclCommon::i_am_admin() && $admin) {
             print(__('You don\'t have permission to access this data.'));
         }
-        
+
         $gb = $this->getGenericBrowser();
         
         if(!$pdf) $gb->set_expandable($this->expandable_rows);
@@ -1076,7 +1074,7 @@ class Utils_RecordBrowser extends Module {
             }
 
             if ($mode=='add') {
-                $id = $this->getRecordset()->addRecord($values);
+                $id = $this->getRecordset()->addRecord($values)->getId();
                 self::$clone_result = $id;
                 self::$clone_tab = $this->getTab();
                 return $this->back();
@@ -2382,7 +2380,6 @@ class Utils_RecordBrowser extends Module {
         $theme->display('View_dirty_read');
     }
     public function view_edit_history($id){
-		load_js('modules/Utils/RecordBrowser/edit_history.js');
         if ($this->is_back())
             return $this->back();
 
@@ -2435,7 +2432,7 @@ class Utils_RecordBrowser extends Module {
                     $created[$k] = $field->decodeValue($v);
                     $old = $this->get_val($k, $created);
 					$gb_row = $gb_cha->get_new_row();
-					$gb_row->add_action('href="javascript:void(0);" onclick="recordbrowser_edit_history_jump(\''.$row['edited_on'].'\',\''.$this->getTab().'\','.$created['id'].',\''.$form->get_name().'\');tabbed_browser_switch(1,2,null,\''.$tb_path.'\')"','View');
+					$gb_row->add_action('href="javascript:void(0);" onclick="Utils_RecordBrowser.history.jump(\''.$row['edited_on'].'\',\''.$this->getTab().'\','.$created['id'].',\''.$form->get_name().'\');tabbed_browser_switch(1,2,null,\''.$tb_path.'\')"','View');
                     $gb_row->add_data(
 				            $date_and_time,
 				            $row['edited_by']!==null?$user:'',
@@ -2468,7 +2465,7 @@ class Utils_RecordBrowser extends Module {
             if (!$access[$args['id']]) continue;
             $val = $this->get_val($field, $created, false, $args);
         }
-		$form->addElement('select', 'historical_view_pick_date', __('View the record as of'), $dates_select, array('onChange'=>'recordbrowser_edit_history("'.$this->getTab().'",'.$created['id'].',"'.$form->get_name().'");', 'id'=>'historical_view_pick_date'));
+		$form->addElement('select', 'historical_view_pick_date', __('View the record as of'), $dates_select, array('onChange'=>'Utils_RecordBrowser.history.load("'.$this->getTab().'",'.$created['id'].',"'.$form->get_name().'");', 'id'=>'historical_view_pick_date'));
 		$form->setDefaults(array('historical_view_pick_date'=>$created['created_on']));
 		$form->display();
 		$this->view_entry('history', $created);

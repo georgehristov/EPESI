@@ -32,6 +32,11 @@ class Utils_RecordBrowser_Recordset_Query_Crits_RawSQL extends Utils_RecordBrows
     	return $ret? []: [$this];
     }
     
+    public function isEmpty()
+    {
+    	return $this->sql === '' && $this->negationSql === '' && !$this->values;
+    }
+    
     public function negate()
     {
         if ($this->negationSql === false)
@@ -44,7 +49,7 @@ class Utils_RecordBrowser_Recordset_Query_Crits_RawSQL extends Utils_RecordBrows
         return $this;
     }
 
-    public function toWords($recordset, $html = true)
+    public function toWords($recordset, $asHtml = true)
     {
     	$sql = $this->get_negation() ? $this->getNegationSql() : $this->getSql();
     	$value = implode(', ', $this->getValues());
@@ -80,9 +85,8 @@ class Utils_RecordBrowser_Recordset_Query_Crits_RawSQL extends Utils_RecordBrows
     {
     	return $this->values;
     }
-    
-    
-    public function replaceValue($search, $replace, $deactivateOnNull = false) {}
+        
+    public function replacePlaceholder(Utils_RecordBrowser_Recordset $recordset, Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder, $humanReadable = false) {}
     
     public function find($key) {}
 }

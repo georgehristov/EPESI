@@ -58,4 +58,10 @@ class Utils_RecordBrowser_Recordset_Field_LongText extends Utils_RecordBrowser_R
    		if ($mode !== 'add')
    			$form->setDefaults([$field => $default]);
     }
+    
+    public function processEdit($values, $existing = []) {
+    	$values[$this->getId()] = Utils_BBCodeCommon::optimize($values[$this->getId()]);
+    	
+    	return parent::processEdit($values, $existing);
+    }
 }

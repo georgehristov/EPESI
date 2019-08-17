@@ -53,17 +53,17 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value
 		return $this->getSQL();
 	}
 	
-	public function replace($search, $replace) {
+	public function replace(Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder, $humanReadable = false) {
 		if ($this->isRawSql()) return false;
 		
-		if ($match = $this->getValue() === $search) {
-			$this->setValue($replace);
+		if ($match = $this->getValue() === $placeholder->getKey()) {
+			$this->setValue($placeholder->getValue($humanReadable));
 		}
 		
 		return $match;
 	}
 
-	public function toWords(Utils_RecordBrowser_Recordset_Field $field, $html = true) {
+	public function toWords(Utils_RecordBrowser_Recordset_Field $field, $asHtml = true) {
 		if ($this->getCallback()) return '';
 		
 		$value = $this->getValue();

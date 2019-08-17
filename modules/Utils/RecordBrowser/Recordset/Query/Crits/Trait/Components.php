@@ -39,10 +39,10 @@ trait Utils_RecordBrowser_Recordset_Query_Crits_Trait_Components
     	}
     }
 
-    public function replaceValue($search, $replace, $deactivateOnNull = false)
+    public function replacePlaceholder(Utils_RecordBrowser_Recordset $recordset, Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder, $humanReadable = false)
     {
     	foreach ($this->getComponents() as $crits) {
-    		$crits->replaceValue($search, $replace, $deactivateOnNull);
+    		$crits->replacePlaceholder($recordset, $placeholder, $humanReadable);
     	}
     }
     
@@ -74,13 +74,13 @@ trait Utils_RecordBrowser_Recordset_Query_Crits_Trait_Components
     	return $this;
     }
     
-    public function toWords($recordset, $html = true)
+    public function toWords($recordset, $asHtml = true)
     {
     	if (!$this->isActive() || $this->isEmpty()) return '';
     	
     	$parts = [];
     	foreach ($this->getComponents() as $crits) {
-    		$words = $crits->toWords($recordset, $html);
+    		$words = $crits->toWords($recordset, $asHtml);
     		
     		$parts[] = $this->isCompound() && $crits->isCompound()? "($words)": $words;
     	}

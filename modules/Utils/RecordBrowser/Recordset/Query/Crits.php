@@ -13,11 +13,11 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
      *
      * Object will be changed! Clone it before use if you'd like to hold original one.
      *
-     * @param mixed $search
-     * @param mixed $replace
-     * @param bool  $deactivateOnNull pass true and null as replace to disable crit
+     * @param Utils_RecordBrowser_Recordset 									$recordset
+     * @param Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder
+     * @param boolean 															$humanReadable replace with placeholder value or label
      */
-    abstract function replaceValue($search, $replace, $deactivateOnNull = false);
+    abstract function replacePlaceholder(Utils_RecordBrowser_Recordset $recordset, Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder, $humanReadable = false);
 
     /**
      * Method to lookup in crits for certain fields crits or crits objects
@@ -50,11 +50,13 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
      */
     abstract public function getQuery(Utils_RecordBrowser_Recordset $recordset);
     
+    abstract public function isEmpty();
+    
     /**
      * @param string|Utils_RecordBrowser_Recordset $recordset
-     * @param boolean $html
+     * @param boolean $asHtml
      */
-    abstract public function toWords($recordset, $html = true);
+    abstract public function toWords($recordset, $asHtml = true);
 
     final public static function registerPlaceholderCallback($callback)
     {
@@ -64,13 +66,14 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     /**
      * Replace all registered placeholders
      *
-     * Object will be cloned. Current object will not be changed.
+     * Returns a modified cloned dbject. Current object will not be changed.
      *
+     * @param Utils_RecordBrowser_Recordset $recordset The recordset that the placeholders shoul the replaced for
      * @param bool $humanReadable Use special value or it's human readable form
      *
      * @return Utils_RecordBrowser_Recordset_Query_Crits New object with replaced values
      */
-    final public function replacePlaceholders($humanReadable = false)
+    final public function toFinal(Utils_RecordBrowser_Recordset $recordset, $humanReadable = false)
     {
         /**
          * @var Utils_RecordBrowser_Recordset_Query_Crits $crits
@@ -78,8 +81,8 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
         $crits = clone $this;
         
         /** @var Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder */
-        foreach ($this->getPlaceholders() as $placeholder) {
-            $crits->replaceValue($placeholder->getKey(), $placeholder->getValue($humanReadable), $placeholder->getDeactivateOnNull($humanReadable));
+        foreach ($crits->getPlaceholders() as $placeholder) {
+        	$crits->replacePlaceholder($recordset, $placeholder, $humanReadable);
         }
         
         return $crits;
@@ -100,8 +103,7 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
                 foreach (is_array($ret)? $ret: [$ret] as $placeholder) {
                 	$key = $placeholder->getKey();
                 	
-                	if (!isset($cache[$user][$key])	|| $cache[$user][$key]->getPriority() < $placeholder->getPriority()
-                    ) {
+                	if (!isset($cache[$user][$key])	|| $cache[$user][$key]->getPriority() < $placeholder->getPriority()) {
                     	$cache[$user][$key] = $placeholder;
                     }
                 }
@@ -123,6 +125,11 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     	return $result? reset($result): '';
     }
         
+    public function deactivate()
+    {
+        return $this->setActive(false);
+    }
+    
     /**
      * @param bool $active
      */
@@ -145,12 +152,7 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     {
         return false;
     }
-            
-    public function isEmpty()
-    {
-        return false;
-    }
-            
+                  
     public static function __set_state($array)
     {
     	$crits = new static();

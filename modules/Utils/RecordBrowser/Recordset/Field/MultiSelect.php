@@ -19,7 +19,7 @@ class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowse
 		]);
 	}
 	
-	public function defaultValue($mode) {
+	public function defaultValue() {
 		return [];
 	}
 		
@@ -92,4 +92,15 @@ class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowse
 				$field => $default
 		]);
 	}   
+	
+	public function processEdit($values, $existing = []) {
+		$values[$this->getId()] = is_array($values[$this->getId()])? $values[$this->getId()]: [$values[$this->getId()]];
+		
+		//TODO: Georgi Hristov does not take repeating values into consideration
+		if (array_diff($existing[$this->getId()], $values[$this->getId()]) === array_diff($values[$this->getId()], $existing[$this->getId()])) {
+			return false;
+		}
+
+		return $values;
+	}
 }

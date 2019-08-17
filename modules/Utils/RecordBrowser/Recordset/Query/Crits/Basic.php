@@ -31,6 +31,11 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic extends Utils_RecordBrowse
         $this->setValue($value);
     }
     
+    public function isEmpty()
+    {
+    	return false;
+    }
+    
     public function validate(Utils_RecordBrowser_Recordset $recordset, $values)
     {
     	if (! $this->isActive()) return [];
@@ -59,14 +64,16 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic extends Utils_RecordBrowse
         return (string) $this->getKey() == $key? $this: null;
     }
 
-    public function replaceValue($search, $replace, $deactivateOnNull = false)
+    public function replacePlaceholder(Utils_RecordBrowser_Recordset $recordset, Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder, $humanReadable = false)
     {
-    	$deactivate = $deactivateOnNull && ($replace === null);
+    	if (! $placeholder->getAvailable($this->getField($recordset))) return;
+    		
+    	$deactivate = $placeholder->getDeactivateCritOnNull($humanReadable) && ($placeholder->getValue() === null);
         
-        $match = $this->getValue()->replace($search, $replace);
+    	$match = $this->getValue()->replace($placeholder, $humanReadable);
         
         if ($match && $deactivate) {        	
-        	$this->setActive(false);
+        	$this->deactivate();
         }
         
         return $match;
@@ -128,8 +135,8 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic extends Utils_RecordBrowse
 	public function getQuery(Utils_RecordBrowser_Recordset $recordset)
 	{
 		if (! $field = $this->getField($recordset)) return $recordset->createQuery();
-		
-		return $field->getQuery($this);
+
+		return $field->getQuery($this->toFinal($recordset));
 	}
 	
 	protected function getField($recordset)
@@ -137,40 +144,42 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic extends Utils_RecordBrowse
 		return Utils_RecordBrowser_Recordset::create($recordset)->getField($this->getKey()->getField(), true);
 	}
 	
-	public function toWords($recordset, $html = true)
+	public function toWords($recordset, $asHtml = true)
 	{
 		/**
 		 * @var Utils_RecordBrowser_Recordset_Field $field
 		 */
 		if (! $field = $this->getField($recordset)) return '';
+		
+		$crits = $this->toFinal($recordset, true);
 
 		$value = '';		
 		$subquery = false;		
-		if ($subfield = $this->getKey()->getSubfield()) {
+		if ($subfield = $crits->getKey()->getSubfield()) {
 			if ($tab2 = $field->getParam('single_tab')) {
-				$crits = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($subfield, $this->getValue(), $this->getOperator());
+				$crits2 = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($subfield, $crits->getValue(), $crits->getOperator());
 				
-				$value = $crits->toWords($tab2, $html);
+				$value = $crits2->toWords($tab2, $asHtml);
 				
 				$subquery = true;
 			}
 		}
 		
-		$value = $subquery? $value: $this->getValue()->toWords($field);
+		$value = $subquery? $value: $crits->getValue()->toWords($field);
 		
 		$key = $field->getLabel();
 		
-		if ($html) {
+		if ($asHtml) {
 			$key = "<strong>$key</strong>";
 			
 			$value = $subquery? $value: '<strong>' . $value . '</strong>';
 		}
 		
-		$operand = $subquery? __('is set to record where'): $this->getOperator()->toWords();
+		$operand = $subquery? __('is set to record where'): $crits->getOperator()->toWords();
 		
 		$ret = "{$key} {$operand} {$value}";
 
-		return $html? $ret: html_entity_decode($ret);
+		return $asHtml? $ret: html_entity_decode($ret);
 		
 		//return Utils_RecordBrowser_Recordset_Query_Crits_Compound::create(['company_name[company_name]' => 'aaa'])->toWords('contact');
 		return Utils_RecordBrowser_Recordset_Query_Crits_Compound::create(['company_name[company_name]' => 'aaa', 'first_name'=>'ddd'])->getQuery('contact');

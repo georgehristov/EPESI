@@ -51,7 +51,7 @@ class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBr
 	    return $ret?: ' ' . $field_sql_id . ' ' . $direction; // key or if position or value failed
     }    
 
-    public function defaultValue($mode) {
+    public function defaultValue() {
     	return [];
     }
     
@@ -64,7 +64,47 @@ class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBr
     }
     
     public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
-    	return Utils_RecordBrowser_Recordset_Field_Select::defaultDisplayCallback($record, $nolink, $desc, $tab);
+    	$values = $record[$desc['id']];
+    	
+    	$commondata_sep = '/';
+    	
+    	$array_id = $desc['param']['array_id'];
+    	    	
+    	$ret = [];
+    	foreach (is_array($values)? $values: [$values] as $value) {
+    		$tooltip = '';
+    		$res = '';
+    		
+    		$path = explode('/', $value);
+	    	
+	    	if (count($path) > 1) {
+	    		$res .= Utils_CommonDataCommon::get_value($array_id . '/' . $path[0], true);
+	    		
+	    		if (count($path) > 2) {
+	    			$res .= $commondata_sep . '...';
+	    			$tooltip = '';
+	    			$full_path = $array_id;
+	    			foreach ($path as $w) {
+	    				$full_path .= '/' . $w;
+	    				$tooltip .= ($tooltip? $commondata_sep: '') . Utils_CommonDataCommon::get_value($full_path, true);
+	    			}
+	    		}
+	    		
+	    		$res .= $commondata_sep;
+	    	}
+	    	
+	    	if (!$label = Utils_CommonDataCommon::get_value($array_id . '/' . $value, true)) continue;
+	    	
+	    	$res .= $label;
+	    	
+	    	$res = Utils_RecordBrowserCommon::no_wrap($res);
+	    	
+	    	if ($tooltip) $res = '<span '.Utils_TooltipCommon::open_tag_attrs($tooltip, false) . '>' . $res . '</span>';
+	    	
+	    	$ret[] = $res;
+    	}
+    	
+    	return $ret? implode('<br />', $ret): '---';
     }
     
     public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
@@ -85,4 +125,15 @@ class Utils_RecordBrowser_Recordset_Field_MultiCommonData extends Utils_RecordBr
     	if ($mode !== 'add')
     		$form->setDefaults([$field => $default]);
     }   
+    
+    public function processEdit($values, $existing = []) {
+    	$values[$this->getId()] = is_array($values[$this->getId()])? $values[$this->getId()]: [$values[$this->getId()]];
+    	
+    	//TODO: Georgi Hristov does not take repeating values into consideration
+    	if (array_diff($existing[$this->getId()], $values[$this->getId()]) === array_diff($values[$this->getId()], $existing[$this->getId()])) {
+    		return false;
+    	}
+    	
+    	return $values;
+    }
 }
