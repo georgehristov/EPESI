@@ -1364,8 +1364,12 @@ class CRM_ContactsCommon extends ModuleCommon {
         $my_company_id = (isset($me['company_name']) && $me['company_name']) ? $me['company_name'] : -1;
 
         return [
-        		Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create('USER', __('User Contact'), "contact/$my_contact_id"),
-        		Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder::create('USER_COMPANY', __('User Company'), "company/$my_company_id"),
+        		Utils_RecordBrowser_Crits_Placeholder::create('USER', __('User Contact'), "contact/$my_contact_id")->setAvailable(function(Utils_RecordBrowser_Recordset_Field $field) {
+        			return in_array($field->getType(), ['select', 'multiselect']) && in_array('contact', $field['param']['select_tabs']);
+        		}),
+        		Utils_RecordBrowser_Crits_Placeholder::create('USER_COMPANY', __('User Company'), "company/$my_company_id")->setAvailable(function(Utils_RecordBrowser_Recordset_Field $field) {
+        			return in_array($field->getType(), ['select', 'multiselect']) && in_array('company', $field['param']['select_tabs']);
+        		}),
         ];
     }
 
