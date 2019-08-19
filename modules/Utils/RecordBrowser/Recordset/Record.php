@@ -592,6 +592,25 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return Utils_TooltipCommon::format_info_tooltip($this->getTooltipData());
     }
     
+    public function getInfo() {
+    	$edited = DB::GetRow('SELECT 
+								edited_on, 
+								edited_by 
+							FROM ' . 
+    							$this->getRecordset()->getTable('history') . ' 
+							WHERE ' . 
+    							$this->getTab() . '_id=%d 
+							ORDER BY edited_on DESC', [$this->getId()]);
+
+		return [
+				'created_on' => $this[':created_on'],
+				'created_by' => $this[':created_by'],
+				'edited_on' => $edited['edited_on']?? null,
+				'edited_by' => $edited['edited_by']?? null,
+				'id' => $this->getId()
+		];
+	}
+    
     public function clone_data() {
         $c = clone $this;
         

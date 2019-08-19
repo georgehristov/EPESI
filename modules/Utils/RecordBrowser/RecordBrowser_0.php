@@ -16,6 +16,9 @@ class Utils_RecordBrowser extends Module {
 	private $recordset;
 	private $addInTable = false;
 	private $genericBrowser;
+	private $columnOrder = [];
+	private $rowsExpandable = true;
+	private $customColumns = [];
 	
     private $browse_mode;
     private $recent = 0;
@@ -31,7 +34,6 @@ class Utils_RecordBrowser extends Module {
     private $multiple_defaults = false;    
     private $custom_filters = array();
     private $default_order = array();
-    private $more_table_properties = array();
     private $fullscreen_table = false;
     private $amount_of_records = 0;
     private $switch_to_addon = null;
@@ -41,7 +43,7 @@ class Utils_RecordBrowser extends Module {
 	private $fields_in_tabs = array();
 	private $hide_tab = array();
     private $jump_to_new_record = false;
-    private $expandable_rows = true;
+    
     public $action = 'Browsing'; // _M('Browsing');
     public $custom_defaults = array();
     public static $tab_param = '';
@@ -51,7 +53,7 @@ class Utils_RecordBrowser extends Module {
     public static $rb_obj = null;
     public $record;
     public $adv_search = false;
-    private $col_order = array();
+    
     private $advanced = array();
     public static $browsed_records = null;
     public static $access_override = array('tab'=>'', 'id'=>'');
@@ -60,8 +62,23 @@ class Utils_RecordBrowser extends Module {
     private $current_field = null;
     private $additional_actions_methods = array();
     private $filter_crits = array();
-    private $disabled = array('search'=>false, 'browse_mode'=>false, 'watchdog'=>false, 'quickjump'=>false, 'filters'=>false, 'headline'=>false, 'actions'=>false, 'favourites'=>false, 'pdf'=>false, 'export'=>false, 'pagination'=>false);
-    private $force_order = [];
+
+	private $disabled = [
+			'search' => false,
+			'browse_mode' => false,
+			'watchdog' => false,
+			'quickjump' => false,
+			'filters' => false,
+			'headline' => false,
+			'actions' => false,
+			'favourites' => false,
+			'pdf' => false,
+			'export' => false,
+			'pagination' => false,
+			'order' => false
+	];
+
+	private $force_order = [];
     private $clipboard_pattern = false;
     private $show_add_in_table = false;
     
@@ -83,10 +100,6 @@ class Utils_RecordBrowser extends Module {
 				'</a>';
 		}
 	}
-
-    public function enable_grid($arg) {
-        $this->grid = $arg;
-    }
 
     public function set_filter_crits($field, $crits) {
         $this->filter_crits[$field] = $crits;
@@ -153,8 +166,20 @@ class Utils_RecordBrowser extends Module {
         }
     }
 
-    public function set_table_column_order($arg) {
-        $this->col_order = $arg;
+    /**
+     * @param array $order
+     * @deprecated use setColumnOrder
+     */
+    public function set_table_column_order($order) {
+    	return $this->setColumnOrder($order);
+    }
+	
+    public function setColumnOrder($columnOrder) {
+    	$this->columnOrder = array_flip(array_values($columnOrder));
+    }
+	
+    public function getColumnOrder() {
+    	return $this->columnOrder;
     }
 	
 	public function set_search_calculated_callback($callback) {
@@ -165,9 +190,28 @@ class Utils_RecordBrowser extends Module {
         return Utils_RecordBrowserCommon::get_val($this->getTab(), $field, $record, $links_not_recommended);
     }
 
+    /**
+     * @param bool $bool
+     * @deprecated use setRowsExpandable
+     */
     public function set_expandable_rows($bool)
     {
-        $this->expandable_rows = $bool;
+        return $this->setRowsExpandable($bool);
+    }
+    
+    /**
+     * Enable or disable expandable rows of the table
+     * 
+     * @param boolean $expandable
+     */
+    public function setRowsExpandable($expandable = true)
+    {
+    	$this->rowsExpandable = $expandable;
+    }
+    
+    public function getRowsExpandable()
+    {
+    	return $this->rowsExpandable;
     }
 
     public function disable_search(){$this->disabled['search'] = true;}
@@ -180,6 +224,7 @@ class Utils_RecordBrowser extends Module {
     public function disable_headline() {$this->disabled['headline'] = true;}
     public function disable_pdf() {$this->disabled['pdf'] = true;}
     public function disable_export() {$this->disabled['export'] = true;}
+    public function disable_order() {$this->disabled['order'] = true;}
     public function disable_actions($arg=true) {$this->disabled['actions'] = $arg;}
     public function disable_pagination($arg=true) {$this->disabled['pagination'] = $arg;}
 
@@ -188,8 +233,26 @@ class Utils_RecordBrowser extends Module {
         $this->more_add_button_stuff = $arg2;
     }
 
+    /**
+     * @param array $ar
+     * @deprecated
+     */
     public function set_header_properties($ar) {
-        $this->more_table_properties = $ar;
+        return $this->setCustomColumns($ar);
+    }
+    
+    /**
+     * Modify deafult grid columns
+     * Hide / show / set label / set width, etc 
+     * 
+     * @param array $customColumns
+     */
+    public function setCustomColumns($customColumns = []) {
+    	$this->customColumns = $customColumns;
+    }
+    
+    public function getCustomColumns() {
+    	return $this->customColumns;
     }
 
     public function get_access($action, $param=null){
@@ -346,6 +409,288 @@ class Utils_RecordBrowser extends Module {
     public function back(){
     	Base_BoxCommon::pop_main();
     }
+
+    public function displayRecordsTable($cols = [], $crits = [], $order = [], $limit = null, $admin = false) {
+    	$this->help('RecordBrowser','main');
+    	
+    	if ($this->check_for_jump()) return;
+    	
+    	if ($this->getRecordset()->getUserAccess('browse') === false) {
+    		print(__('You are not authorised to browse this data.'));
+    		return;
+    	}
+    	
+    	$this->action = 'Browse';
+    	if (! Acl::i_am_admin() && $admin) {
+    		print(__('You don\'t have permission to access this data.'));
+    	}
+    	
+    	$gb = $this->getGenericBrowser();
+    	
+    	if ($this->isGridEditEnabled()) load_js('modules/Utils/RecordBrowser/grid.js');
+    	
+    	//callback to set specifics og Generic Browser
+    	call_user_func($callback, $gb);
+    	
+    	
+    	if (!$this->disabled['search']) {
+    		$gb->is_adv_search_on();
+    		$is_searching = $gb->get_module_variable('search','');
+    		if (!empty($is_searching)) {
+    			if ($this->get_module_variable('browse_mode')!='all'
+    			//                  || $gb->get_module_variable('quickjump_to')!=null
+    					) {
+    						$this->set_module_variable('browse_mode','all');
+    						//                  $gb->set_module_variable('quickjump_to',null);
+    						location(array());
+    						return;
+    					}
+    		}
+    	}
+    	
+    	if (! $tableColumns = $this->getTableColumns($pdf, $cols, $admin, $special)) {
+    		print('Invalid view, no fields to display');
+    		return;
+    	}
+    	
+    	$gb->set_table_columns( $tableColumns );
+    	
+    	//search
+    	//quickjump
+    	//buttons
+    	
+    	$this->amount_of_records = $this->getRecordset()->getRecordsCount($crits, $admin);
+    	
+    	if ($limit === null && !$this->disabled['pagination']) {
+    		$limit = $gb->get_limit($this->amount_of_records);
+    	}
+    	
+    	$records = $this->getTableRecords($crits, $order, $limit, $admin);
+    	    	
+    	$gb->set_custom_label($this->getTableCustomLabel());
+    	
+    	$this->view_fields_permission = $this->get_access('add', $this->custom_defaults);
+    	
+    	$column_access = array_fill(0, count($tableColumns), false);
+    	
+    	/**
+    	 * @var Utils_RecordBrowser_Recordset_Record $record
+    	 */
+    	foreach ($records as $record) {
+    		$record->process('browse');
+    		
+    		self::$access_override['id'] = $record['id'];
+
+    		$row_data = [];
+
+    		foreach($tableColumns as $k => $desc) {
+    			$value = call_user_func_array($desc['cell_callback'], [$record, $nolink, $desc, $admin]);
+
+    			if ($value === false) {
+    				$row_data[] = '';
+    				continue;
+    			}
+    			
+    			$column_access[$k] = true;
+    			
+    			$row_data[] = $value;
+    			
+//     			if ($pdf) {
+//     				$value['overflow_box'] = false;
+//     				$value['attrs'] = $attrs . ' style="border:1px solid black;"';
+//     				$value['value'] = '&nbsp;' . $value['value'] . '&nbsp;';
+//     			}
+    		}
+    		
+    		$gb_row = $gb->get_new_row();
+    		
+    		$gb_row->add_data_array($row_data);
+    		
+    		$this->addTableRowActions($record, $gb_row, $admin);
+    	}
+    	
+    	$this->addInTableRow($cols);
+
+    	$args = [];
+    	if ($pdf) {
+    		$gb->absolute_width(true);
+    		$args = [Base_ThemeCommon::get_template_filename('Utils_GenericBrowser','pdf')];
+    	}
+    	
+    	if (!$this->addInTableEnabled()) {
+    		foreach ($column_access as $k => $access) {
+    			if ($access) continue;
+    			
+    			$gb->set_column_display($k, false);
+    		}
+    	}
+    	
+    	$this->display_module($gb, $args);
+    }
+    
+    protected function getTableRecords($crits = [], $order = [], $limit = null, $admin = false) {
+    	$records = [];
+    	
+    	$last_offset = $this->get_module_variable('last_offset');
+    	
+    	while (!$records) {
+    		$records = $this->getRecordset()->getRecords($crits, $order, $limit, $admin);
+    		
+    		if ($last_offset > $limit['offset'] && ($limit['offset'] - $limit['numrows'])>=0) {
+    			$limit['offset'] -= $limit['numrows'];
+    		}
+    		elseif($limit['offset'] + $limit['numrows'] < $this->amount_of_records) {
+    			$limit['offset'] += $limit['numrows'];
+    		}
+    		else break;
+    		
+    		$this->getGenericBrowser()->set_module_variable('offset', $limit['offset']);
+    		$limit = $this->getGenericBrowser()->get_limit($this->amount_of_records);
+    	}
+    	
+    	$this->set_module_variable('last_offset', $limit['offset']);
+    	
+    	return $records;
+    }
+    
+    protected function getTableCustomLabel() {
+    	$custom_label = '';
+    	if ($this->add_button !== false && $this->get_access('add', $this->custom_defaults)!==false) {
+    		if ($this->add_button!==null) {
+    			$href = $this->add_button;
+    		}
+    		elseif (!$this->multiple_defaults) {
+    			$href = $this->create_callback_href([$this, 'navigate'], ['view_entry', 'add', null, $this->custom_defaults]);
+    		}
+    		else {
+    			$href = Utils_RecordBrowserCommon::create_new_record_href($this->getTab(),$this->custom_defaults,'multi',true,true);
+    		}
+    		
+    		if ($href) $custom_label = '<a '.$href.'><span class="record_browser_add_new" '.Utils_TooltipCommon::open_tag_attrs(__('Add new record')).'><img src="'.Base_ThemeCommon::get_template_file('Utils/RecordBrowser/add.png').'" /><div class="add_new">'.__('Add new').'</div></span></a>';
+    	}
+    	if ($this->more_add_button_stuff) {
+    		$custom_label = $custom_label? '<table><tr><td>'.$custom_label.'</td><td>'.$this->more_add_button_stuff.'</td></tr></table>': $this->more_add_button_stuff;
+    	}
+    	
+    	return $custom_label;
+    }
+    
+    protected function addTableRowActions(Utils_RecordBrowser_Recordset_Record $record, Utils_GenericBrowser_RowObject $gb_row, $admin) {
+    	if ($this->disabled['actions'] === true) return;
+    	
+		$disabledActions = is_array($this->disabled['actions'])? array_flip($this->disabled['actions']): [];		
+
+		if (! isset($disabledActions['view'])) {
+			$gb_row->add_action($this->create_callback_href([$this,	'navigate'], ['view_entry', 'view', $record['id']]), __('View'), null, 'view');
+		}
+		
+		if (! isset($disabledActions['edit'])) {			
+			if ($record->getUserAccess('edit', $admin)) {
+				$gb_row->add_action($this->create_callback_href([$this, 'navigate'], ['view_entry', 'edit', $record['id']]), __('Edit'), null, 'edit');
+			}
+			else {
+				$gb_row->add_action('', __('Edit'), __('You don\'t have permission to edit this record.'), 'edit', 0, true);
+			}
+		}
+		
+		if ($admin) {
+			if ($record[':active']) {
+				$gb_row->add_action($this->create_callback_href([$this, 'set_active'], [$record['id'], false]), __('Deactivate'), null, 'active-on');
+			}
+			else {				
+				$gb_row->add_action($this->create_callback_href([$this, 'set_active'], [$record['id'], true]), __('Activate'), null, 'active-off');
+			}
+			
+			$info = $record->getInfo();
+			
+			if ($info['edited_on']) {
+				$gb_row->add_action($this->create_callback_href([$this, 'navigate'], ['view_edit_history', $record['id']]), __('View edit history'), null, 'history');
+			}
+			else {
+				$gb_row->add_action('', __('This record was never edited'), null, 'history_inactive');
+			}
+		}
+		else {
+			if (! isset($disabledActions['delete'])) {
+				if ($record->getUserAccess('delete', $admin)) {
+					$gb_row->add_action($this->create_confirm_callback_href(__('Are you sure you want to delete this record?'), [$this, 'delete_record'], [$record['id'], false]), __('Delete'), null, 'delete');
+				}
+				else {
+					$gb_row->add_action('', __('Delete'), __('You don\'t have permission to delete this record'), 'delete', 0, true);
+				}
+			}
+		}
+		
+		if (! isset($disabledActions['info'])) {
+			$gb_row->add_info(($this->browse_mode == 'recent' ? '<b>' . __('Visited on: %s', [$record['visited_on']]) . '</b><br>': '') . Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $info ?? $record['id']));
+		}
+
+		$this->call_additional_actions_methods($record, $gb_row);
+	}
+	
+	protected function addInTableRow($customColumns = []) {
+		if (!$this->addInTableEnabled() || !$this->view_fields_permission) return;
+
+		$form = $this->init_module(Libs_QuickForm::module_name(), null, 'add_in_table__' . $this->getTab());
+		
+		self::$last_record = $this->record = $this->custom_defaults = $this->getRecordset()->process($this->custom_defaults, 'adding');			
+		
+		$this->prepare_view_entry_details($this->custom_defaults, 'add', null, $form, $this->getTableFields($customColumns));
+		$form->setDefaults($this->custom_defaults);
+			
+		if ($form->isSubmitted()) {
+			$this->set_module_variable('force_add_in_table_after_submit', true);
+			if ($form->validate()) {
+				$values = array_merge($this->custom_defaults, $form->exportValues());
+					
+				$this->getRecordset()->addRecord($values);
+				location([]);
+			} else {
+				$this->show_add_in_table = true;
+			}
+		}
+		
+		$form->addElement('submit', 'submit_qanr', __('Save'), [
+				'style' => 'width:100%;height:19px;',
+				'class' => 'button'
+		]);
+		$renderer = new HTML_QuickForm_Renderer_TCMSArraySmarty();
+		$form->accept($renderer);
+		$data = $renderer->toArray();
+			
+		$gb = $this->getGenericBrowser();
+			
+		$gb->set_prefix($data['javascript'] . '<form ' . $data['attributes'] . '>' . $data['hidden'] . "\n");
+			
+		$gb->set_postfix("</form>\n");
+			
+		if (!$admin && $this->modeEnabled('favorites')) {
+				$row_data= array('&nbsp;');
+		} else $row_data= array();
+		
+		if (!$admin && $this->modeEnabled('watchdog'))
+				$row_data[] = '&nbsp;';
+		
+		$first = true;
+		foreach ( $tableFields as $k => $v ) {
+			if (isset($data[$k])) {
+				$row_data[] = [
+						'value' => $data[$k]['error'] . $data[$k]['html'],
+						'overflow_box' => false
+				];
+				if ($first) eval_js('focus_on_field = "' . $k . '";');
+				$first = false;
+			}
+			else
+				$row_data[] = '&nbsp;';
+		}
+
+		$gb_row = $gb->get_new_row();
+		$gb_row->add_action('', $data['submit_qanr']['html'], '', null, 0, false, 7);
+		$gb_row->set_attrs('id="add_in_table_row" style="display:' . ($this->show_add_in_table ? '': 'none') . ';"');
+		$gb_row->add_data_array($row_data);
+	}
+   
     //////////////////////////////////////////////////////////////////////////////////////////
     public function show_data($crits = array(), $cols = array(), $order = array(), $admin = false, $special = false, $pdf = false, $limit = null) {
 		$this->help('RecordBrowser','main');
@@ -357,8 +702,8 @@ class Utils_RecordBrowser extends Module {
             self::$clone_result = null;
             if ($clone_result!='canceled') return;
         }
+        
         if ($this->check_for_jump()) return;
-        Utils_RecordBrowserCommon::$cols_order = $this->col_order;
         
         if ($this->getRecordset()->getUserAccess('browse') === false) {
             print(__('You are not authorised to browse this data.'));
@@ -366,21 +711,25 @@ class Utils_RecordBrowser extends Module {
         }
 
         $this->action = 'Browse';
-        if (!Base_AclCommon::i_am_admin() && $admin) {
+        if (! Acl::i_am_admin() && $admin) {
             print(__('You don\'t have permission to access this data.'));
         }
 
         $gb = $this->getGenericBrowser();
-        
-        if(!$pdf) $gb->set_expandable($this->expandable_rows);
-        
-        if($pdf) $gb->set_resizable_columns(false);
-        else $gb->set_fixed_columns_class($this->fixed_columns_class);
+
+        if ($pdf) {
+        	$gb->set_resizable_columns(false);
+        }
+        else {
+        	$gb->set_fixed_columns_class($this->fixed_columns_class);
+        	$gb->set_expandable($this->getRowsExpandable());
+        }
 
         if ($special) {
             $gb_per_page = Base_User_SettingsCommon::get(Utils_GenericBrowser::module_name(),'per_page');
             $gb->set_per_page(Base_User_SettingsCommon::get(Utils_RecordBrowser_RecordPicker::module_name(),'per_page'));
         }
+        
         if (!$this->disabled['search']) {
             $gb->is_adv_search_on();
             $is_searching = $gb->get_module_variable('search','');
@@ -396,69 +745,16 @@ class Utils_RecordBrowser extends Module {
             }
         }
 
-        if ($special) {
-            $table_columns = array(array('name'=>__('Select'), 'width'=>'40px'));
-        } else {
-            $table_columns = array();
-            if (!$pdf && !$admin && $this->modeEnabled('favorites')) {
-                $fav = array('name'=>'&nbsp;', 'width'=>'24px', 'attrs'=>'class="Utils_RecordBrowser__favs"');
-                if (!isset($this->force_order)) $fav['order'] = ':Fav';
-                $table_columns[] = $fav;
-            }
-            if (!$pdf && !$admin && $this->modeEnabled('watchdog'))
-                $table_columns[] = array('name'=>'', 'width'=>'24px', 'attrs'=>'class="Utils_RecordBrowser__watchdog"');
-        }
-        if (!$this->disabled['quickjump']) $quickjump = $this->getRecordset()->getProperty('quickjump');
-        else $quickjump = '';
-
-        $visibleFields = $this->getRecordset()->getVisibleFields($cols);
+        
+        $tableFields = $this->getTableFields($cols);
         
         $query_cols = [];
-        foreach ($visibleFields as $field) {
-        	$query_cols[] = $field['id'];
-            
-            $disabled = [
-            		'order' => $pdf || $this->force_order || $this->browse_mode =='recent',
-            		'quickjump' => $pdf || !$quickjump || $field['name']===$quickjump,
-            		'search' => $pdf || $this->disabled['search']
-            ];
-
-            $column = array_merge($field->getGridColumnOptions($this, $disabled), $this->more_table_properties[$field['id']]?? []);
-            
-            if (isset($column['quickjump'])) $column['quickjump'] = '"~'.$column['quickjump'];
-			if ($pdf) {
-				$column['attrs'] = 'style="border:1px solid black;font-weight:bold;text-align:center;color:white;background-color:gray"';
-				if (!isset($column['width'])) $column['width'] = 100;
-				if ($column['width']==1) $column['width'] = 100;
-			}
-			$table_columns[] = $column;
+        
+        if (!$table_columns = $this->getTableColumns($pdf, $cols, $admin, $special)) {
+        	print('Invalid view, no fields to display');
+        	return;
         }
-		if ($pdf) {
-			$max = 0;
-			$width_sum = 0;
-			foreach ($table_columns as $k=>$v)
-				if ($v['width']>$max) $max = $v['width'];
-			foreach ($table_columns as $k=>$v) {
-				$table_columns[$k]['width'] = intval($table_columns[$k]['width']);
-				if ($table_columns[$k]['width']<$max/2) $table_columns[$k]['width'] = $max/2;
-				$width_sum += $table_columns[$k]['width'];
-			}
-			$fraction = 0;
-			foreach ($table_columns as $k=>$v) {
-				$table_columns[$k]['width'] = floor(100*$v['width']/$width_sum);
-				$fraction += 100*$v['width']/$width_sum - $table_columns[$k]['width'];
-				if ($fraction>1) {
-					$table_columns[$k]['width'] += 1;
-					$fraction -= 1;
-				}
-				$table_columns[$k]['width'] = $table_columns[$k]['width'].'%';
-			}
-		}
-		if (empty($table_columns)) {
-			print('Invalid view, no fields to display');
-			return;
-		}
-
+        
 		$gb->set_table_columns( $table_columns );
 		
 		if (!$pdf && $this->browse_mode != 'recent') {
@@ -468,9 +764,9 @@ class Utils_RecordBrowser extends Module {
                     $clean_order[$k] = $v;
                     continue;
                 }
-				if(!in_array($k,$query_cols)) continue;
-				if (isset($this->more_table_properties[$k]) && isset($this->more_table_properties[$k]['name'])) {
-                    $key = $this->more_table_properties[$k]['name'];
+				if(!in_array($k, $query_cols)) continue;
+				if (isset($this->customColumns[$k]) && isset($this->customColumns[$k]['name'])) {
+                    $key = $this->customColumns[$k]['name'];
                 } else {
                     $key = $this->getRecordset()->getField($k)->getLabel();
                 }
@@ -588,7 +884,7 @@ class Utils_RecordBrowser extends Module {
                 'cols'=>$cols,
                 'order'=>$order,
                 'admin'=>$admin,
-                'more_table_properties'=>$this->more_table_properties,
+                'more_table_properties'=>$this->customColumns,
                 'limit' => $print_limit,
             );
             $print_href = 'href="modules/Utils/RecordBrowser/print.php?'.http_build_query(array('key'=>$key, 'cid'=>CID)).'" target="_blank"';
@@ -599,7 +895,7 @@ class Utils_RecordBrowser extends Module {
             $this->new_button('print', __('Print'), "$print_href $print_tooltip");
 		}
 
-		if(!$records = $this->getRecordset()->getRecords($crits, $order, $limit, $admin)) {
+		if (!$records = $this->getRecordset()->getRecords($crits, $order, $limit, $admin)) {
             $last_offset = $this->get_module_variable('last_offset');
             while(!$records) {
                 if($last_offset > $limit['offset'] && ($limit['offset']-$limit['numrows'])>=0)
@@ -694,19 +990,23 @@ class Utils_RecordBrowser extends Module {
             
             self::$access_override['id'] = $record['id'];
             $gb_row = $gb->get_new_row();
-			$row_data = array();
+			
+            $row_data = [];
 			if (!$pdf && !$admin && $this->modeEnabled('favorites')) {
                 $isfav = isset($favs[$record['id']]);
                 $row_data[] = Utils_RecordBrowserCommon::get_fav_button($this->getTab(), $record['id'], $isfav);
             }
-            if (!$pdf && !$admin && $this->modeEnabled('watchdog'))
-                $row_data[] = Utils_WatchdogCommon::get_change_subscription_icon($this->getTab(),$record['id']);
+            
+            if (!$pdf && !$admin && $this->modeEnabled('watchdog')) {
+            	$row_data[] = Utils_WatchdogCommon::get_change_subscription_icon($this->getTab(), $record['id']);
+            }
+                
             if ($special) {
                 $element = $this->get_module_variable('element');
                 $row_id = $this->include_tab_in_id? $this->getTab() . '/' . $record['id']: $record['id'];
                 $formated_name = Utils_RecordBrowserCommon::create_default_linked_label($this->getTab(), $record['id'], true);
                 $formated_name = htmlspecialchars(strip_tags($formated_name));
-                $row_data = array('<input type="checkbox" id="leightbox_rpicker_' . $element . '_' . $row_id . '" formated_name="' . $formated_name . '" />');
+                $row_data = ['<input type="checkbox" id="leightbox_rpicker_' . $element . '_' . $row_id . '" formated_name="' . $formated_name . '" />'];
                 $rpicker_ind[] = $row_id;
             }
             
@@ -723,7 +1023,7 @@ class Utils_RecordBrowser extends Module {
 				$value = $record->getValue($fieldId, $special || $pdf);
 
                 if (strip_tags($value)=='') $value .= '&nbsp;';
-                if ($args['style']=='currency' || $args['style']=='number') $value = array('style'=>'text-align:right;','value'=>$value);
+                if ($args['style']=='currency' || $args['style']=='number') $value = ['style'=>'text-align:right;','value'=>$value];
                 if ($grid_enabled && !in_array($args['type'], array('calculated','multiselect','commondata'))) {
                     $table = '<table class="Utils_RecordBrowser__grid_table" style="width:100%" cellpadding="0" cellspacing="0" border="0"><tr><td id="grid_form_field_'.$fieldId.'_'.$record['id'].'" style="display:none;">Loading...</td><td id="grid_value_field_'.$fieldId.'_'.$record['id'].'">';
                     $ed_icon = '</td><td style="min-width:18px;width:18px;padding:0px;margin:0px;">'.
@@ -744,19 +1044,20 @@ class Utils_RecordBrowser extends Module {
                     $ed_icon = '';
                     $attrs = '';
                 }
+                
                 if (is_array($value)) {
-                    $value['value'] = $table.$value['value'].$ed_icon;
+                    $value['value'] = $table . $value['value'] . $ed_icon;
                     $value['attrs'] = $attrs;
                 } else {
-                    $value = array(
-                        'value'=>$table.$value.$ed_icon,
-                        'attrs'=>$attrs
-                    );
+                    $value = [
+                        'value' => $table . $value . $ed_icon,
+                        'attrs' => $attrs
+                    ];
                 }
 				if ($pdf) {
                     $value['overflow_box'] = false;
-					$value['attrs'] = $attrs.' style="border:1px solid black;"';
-					$value['value'] = '&nbsp;'.$value['value'].'&nbsp;';
+					$value['attrs'] = $attrs . ' style="border:1px solid black;"';
+					$value['value'] = '&nbsp;' . $value['value'] . '&nbsp;';
 				}
                 $row_data[] = $value;
             }
@@ -789,23 +1090,22 @@ class Utils_RecordBrowser extends Module {
             }
         }
         if (!$special && $this->addInTableEnabled() && $this->view_fields_permission) {
+			self::$last_record = $this->record = $this->custom_defaults = $this->getRecordset()->process($this->custom_defaults, 'adding');
 
-		self::$last_record = $this->record = $this->custom_defaults = $this->getRecordset()->process($this->custom_defaults, 'adding');
+			$this->prepare_view_entry_details($this->custom_defaults, 'add', null, $form, $tableFields);
+       	 	$form->setDefaults($this->custom_defaults);
 
-		$this->prepare_view_entry_details($this->custom_defaults, 'add', null, $form, $visibleFields);
-        $form->setDefaults($this->custom_defaults);
-
-        if ($form->isSubmitted()) {
-        	$this->set_module_variable('force_add_in_table_after_submit', true);
-            if ($form->validate()) {
-            	$values = array_merge($this->custom_defaults, $form->exportValues());
-                    	
-            	$this->getRecordset()->addRecord($values);
-            	location([]);
-           	} else {
-            	$this->show_add_in_table = true;
-            }
-        }
+	        if ($form->isSubmitted()) {
+	        	$this->set_module_variable('force_add_in_table_after_submit', true);
+	            if ($form->validate()) {
+	            	$values = array_merge($this->custom_defaults, $form->exportValues());
+	                    	
+	            	$this->getRecordset()->addRecord($values);
+	            	location([]);
+	           	} else {
+	            	$this->show_add_in_table = true;
+	            }
+	        }
             $form->addElement('submit', 'submit_qanr', __('Save'), array('style'=>'width:100%;height:19px;', 'class'=>'button'));
             $renderer = new HTML_QuickForm_Renderer_TCMSArraySmarty();
             $form->accept($renderer);
@@ -821,7 +1121,7 @@ class Utils_RecordBrowser extends Module {
                 $row_data[] = '&nbsp;';
 
             $first = true;
-            foreach($visibleFields as $k => $v) {
+            foreach($tableFields as $k => $v) {
                 if (isset($data[$k])) {
                     $row_data[] = array('value'=>$data[$k]['error'].$data[$k]['html'], 'overflow_box'=>false);
                     if ($first) eval_js('focus_on_field = "'.$k.'";');
@@ -870,6 +1170,115 @@ class Utils_RecordBrowser extends Module {
     	
     	return $this->genericBrowser = $this->init_module(Utils_GenericBrowser::module_name(), null, $this->getTab());
     }
+    
+    /**
+     * @param boolean $arg
+     * @deprecated use enableGridEdit
+     */
+    public function enable_grid($arg) {
+    	return $this->enableGridEdit($arg);
+    }
+    
+    public function enableGridEdit($enable = true) {
+    	$this->grid = $enable;
+    }
+    
+    public function isGridEditEnabled() {
+    	if (isset($this->grid)) return $this->grid;
+    	
+    	return $this->grid = Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(), 'grid');
+    }
+    
+    protected function getTableColumns($pdf = false, $customColumns = [], $admin = false, $special = false) {
+    	
+    	$quickjump = !$this->disabled['quickjump']? $this->getRecordset()->getProperty('quickjump'): '';
+    	
+    	$ret = [];
+    	
+    	if ($special) {
+    		$ret[] = ['name'=>__('Select'), 'width'=>'40px'];
+    	} else {
+    		if (!$pdf && !$admin && $this->modeEnabled('favorites')) {
+    			$fav = ['name'=>'&nbsp;', 'width'=>'24px', 'attrs'=>'class="Utils_RecordBrowser__favs"'];
+    			if (!isset($this->force_order)) $fav['order'] = ':Fav';
+    			$ret[] = $fav;
+    		}
+    		if (!$pdf && !$admin && $this->modeEnabled('watchdog'))
+    			$ret[] = ['name'=>'', 'width'=>'24px', 'attrs'=>'class="Utils_RecordBrowser__watchdog"'];
+    	}
+    	
+    	foreach ($this->getTableFields($customColumns) as $field) {
+    		$disabled = [
+    				'order' => $pdf || $this->disabled['order'] || $this->force_order || $this->browse_mode =='recent',
+    				'quickjump' => $pdf || $this->disabled['quickjump'] || !$quickjump || $field['name']===$quickjump,
+    				'search' => $pdf || $this->disabled['search']
+    		];
+    		
+    		$column = array_merge($field->getGridColumnOptions($this, $disabled), $this->customColumns[$field['id']]?? []);
+    		
+    		if (isset($column['quickjump'])) $column['quickjump'] = '"~' . $column['quickjump'];
+    		
+    		if ($pdf) {
+    			$column['attrs'] = 'style="border:1px solid black;font-weight:bold;text-align:center;color:white;background-color:gray"';
+    			$column['width'] = $column['width']?? 100;
+    			if ($column['width'] == 1) $column['width'] = 100;
+    		}
+    		$ret[] = $column;
+    	}
+    	
+		if ($pdf) {
+			$max = 0;
+			$width_sum = 0;
+			foreach ( $ret as $k => $v ) {
+				if ($v['width'] > $max) $max = $v['width'];
+			}
+
+			foreach ( $ret as $k => $v ) {
+				$ret[$k]['width'] = intval($ret[$k]['width']);
+				if ($ret[$k]['width'] < $max / 2) $ret[$k]['width'] = $max / 2;
+				$width_sum += $ret[$k]['width'];
+			}
+			$fraction = 0;
+			foreach ( $ret as $k => $v ) {
+				$ret[$k]['width'] = floor(100 * $v['width'] / $width_sum);
+				$fraction += 100 * $v['width'] / $width_sum - $ret[$k]['width'];
+				if ($fraction > 1) {
+					$ret[$k]['width'] += 1;
+					$fraction -= 1;
+				}
+				$ret[$k]['width'] = $ret[$k]['width'] . '%';
+			}
+		}
+    	
+    	return $ret;
+    }
+    
+    protected function getTableFields($customFields = []) {
+    	$order = 'position';
+    	if ($columnOrder = $this->getColumnOrder()) {
+    		$order = function ($field1, $field2) use ($columnOrder) {
+    			$order1 = $columnOrder[$field1->getId()]?? 100;
+    			$order2 = $columnOrder[$field2->getId()]?? 100;
+    			
+    			return $order1 > $order2;
+    		};
+    	}
+
+    	return $this->getRecordset()->getVisibleFields($customFields, $order);
+    }
+    
+    protected function getVisibleFields() {
+    	$customFields = $this->setCustomColumns();
+    	$ret = [];
+    	foreach($this->getRecordset()->getFields() as $field) {
+    		if (!$field['visible'] && !($custom[$field['id']]?? true)) continue;
+    		
+    		$ret[$field['id']] = $field;
+    	}
+    	
+    	return $ret;
+    }
+    
     
     public function addInTableEnabled() {
     	return $this->addInTable;
@@ -929,7 +1338,6 @@ class Utils_RecordBrowser extends Module {
         }
         self::$browsed_records = null;
 
-        Utils_RecordBrowserCommon::$cols_order = array();
         $js = ($mode!='view');
         $time = microtime(true);
         if ($this->is_back()) {

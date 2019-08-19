@@ -17,6 +17,7 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
 				'order' => $this->isStored(),
 				'quickjump' => $this->isStored(),
 				'search' => $this->isStored(),
+				'gridEdit' => false
 		]);
 	}
 	

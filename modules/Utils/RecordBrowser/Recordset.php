@@ -207,17 +207,6 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return $ret;
 	}
 	
-	public function getVisibleFields($custom = []) {
-		$ret = [];
-		foreach($this->getFields() as $field) {
-			if (!$field['visible'] && !($custom[$field['id']]?? false)) continue;
-			
-			$ret[$field['id']] = $field;
-		}
-		
-		return $ret;
-	}
-	
 	public function getAccessibleFields($action = 'view') {
 		$access = $this->getUserAccess($action);
 		

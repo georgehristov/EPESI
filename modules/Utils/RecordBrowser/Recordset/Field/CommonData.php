@@ -17,8 +17,9 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
 		return array_merge(parent::gridColumnOptions($recordBrowser), [
 				'wrapmode' => 'nowrap',
 				'width' => 50,
-				'quickjump' => (!is_array($this->param) || strpos($this->param['array_id'],':')===false),
-				'search' => (!is_array($this->param) || strpos($this->param['array_id'],':')===false),
+				'quickjump' => !is_array($this['param']) || strpos($this['param']['array_id'],':')===false,
+				'search' => !is_array($this['param']) || strpos($this['param']['array_id'],':')===false,
+				'gridEdit' => false
 		]);
 	}
 	

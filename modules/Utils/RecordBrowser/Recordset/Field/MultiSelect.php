@@ -16,6 +16,7 @@ class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowse
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
 		return array_merge(parent::gridColumnOptions($recordBrowser), [
 				'order' => false,
+				'gridEdit' => false
 		]);
 	}
 	

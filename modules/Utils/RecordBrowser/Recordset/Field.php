@@ -41,7 +41,10 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 				'search' => true,
 				'search_type' => 'text',
 				'wrapmode' => false,
-				'width' => 100
+				'width' => 100,
+				'gridEdit' => $recordBrowser->isGridEditEnabled(),
+				'args' => $this->getId(),
+				'cell_callback' => [__CLASS__, 'getGridCell']
 		];
 	}
 	
@@ -561,8 +564,57 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		
 		return $this;
 	}
+
+	final public static function getGridCell($record, $nolink, $desc, $admin) {
+		$fieldId = $desc['args'];
+		
+		if (!$field = $record->getRecordset()->getField($fieldId)) return '&nbsp;';
+		
+		if (!$field->getAccess($record, $admin)) return false;
+		
+		$value = $record->getValue($fieldId, $nolink);
+		
+		if (!strip_tags($value)) $value .= '&nbsp;';
+		
+		if (in_array($field['style'], ['currency', 'number'])) {
+			$value = [
+					'style' => 'text-align:right;',
+					'value' => $value
+			];
+		}
+		
+		$table = '';
+		$ed_icon = '';
+		$attrs = '';
+		if ($desc['gridEdit']?? false) {
+			$table = '<table class="Utils_RecordBrowser__grid_table" style="width:100%" cellpadding="0" cellspacing="0" border="0"><tr><td id="grid_form_field_'.$fieldId.'_'.$record['id'].'" style="display:none;">Loading...</td><td id="grid_value_field_'.$fieldId.'_'.$record['id'].'">';
+			$ed_icon = '</td><td style="min-width:18px;width:18px;padding:0px;margin:0px;">'.
+					'<span id="grid_edit_'.$fieldId.'_'.$record['id'].'" style="float:right;display:none;"><a href="javascript:void(0);" onclick="grid_enable_field_edit(\''.$fieldId.'\','.$record['id'].',\''.$record->getTab().'\',\''.$desc['form_name'].'\');"><img border="0" src="'.Base_ThemeCommon::get_template_file(Utils_GenericBrowser::module_name(), 'edit.png').'"></a></span>'.
+					'<span id="grid_save_'.$fieldId.'_'.$record['id'].'" style="float:right;display:none;"><a href="javascript:void(0);" onclick="grid_submit_field(\''.$fieldId.'\','.$record['id'].',\''.$record->getTab().'\');"><img border="0" src="'.Base_ThemeCommon::get_template_file(Utils_RecordBrowser::module_name(), 'save_grid.png').'"></a></span>'.
+					'</td></tr></table>';
+			
+			$attrs = 'onmouseover="if(typeof(mouse_over_grid)!=\'undefined\') mouse_over_grid(\''.$fieldId.'\',\''.$record['id'].'\');" onmouseout="if(typeof(mouse_out_grid)!=\'undefined\') mouse_out_grid(\''.$fieldId.'\',\''.$record['id'].'\');"';
+		}
+		
+		$value = is_array($value)? $value: compact('value');
+		
+		$value['value'] = $table . $value['value'] . $ed_icon;
+		$value['attrs'] = $attrs;
+		
+		return $value;
+	}
 	
-	
+	final public function getAccess($record, $admin) {
+		static $cache;
+		
+		$key = md5(serialize([$record['id'], $admin? 1: 0]));
+		
+		if (!isset($cache[$key])) {
+			$cache[$key] = $record->getUserAccess('view', $admin);
+		}
+		
+		return $cache[$key][$this->getId()];
+	}
 	
 	// *********** Interface methods *********** //
 	final public function count() {
