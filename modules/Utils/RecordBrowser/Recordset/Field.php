@@ -41,9 +41,11 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 				'search' => true,
 				'search_type' => 'text',
 				'wrapmode' => false,
+				'visible' => $this->isVisible(),
+				'position' => $this->getPosition(),
 				'width' => 100,
 				'gridEdit' => $recordBrowser->isGridEditEnabled(),
-				'args' => $this->getId(),
+				'field' => $this->getId(),
 				'cell_callback' => [__CLASS__, 'getGridCell']
 		];
 	}
@@ -118,7 +120,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	public function isEmpty($record) {
 		if (is_array($record[$this->getId()])) return empty($record[$this->getId()]);
 		
-		return $record[$this->getId()]=='';
+		return $record[$this->getId()] == '';
 	}
 	
 	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
@@ -153,6 +155,10 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		$value = $crit->getSQLValue();
 		
 		return $this->getRecordset()->createQuery($this->getQueryId() . " $operator $value");
+	}
+		
+	public function getSearchCrits($word) {
+		return Utils_RecordBrowser_Crits::create(['~'.$this->getId() => "%$word%"]);
 	}
 		
 	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
@@ -419,7 +425,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	final public function getGridColumnOptions(Utils_RecordBrowser $recordBrowser, $disabled = []) {
 		$column = array_filter(array_diff_key($this->gridColumnOptions($recordBrowser), array_filter($disabled)));
 		
-		$options = array_fill_keys(['quickjump', 'order', 'search'], $this->getId());
+		$options = array_fill_keys(['quickjump', 'order', 'search'], $this->getLabel());
 		
 		return array_replace($column, array_intersect_key($options, $column));
 	}
@@ -432,12 +438,12 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return $this->getTooltip('<span id="_'.$this->getId().'__label">'.$this->getLabel().'</span>');
 	}
 	
-	final public function createQFfield($form, $mode, $record, $custom_defaults, $rb_obj) {
-		if ($mode == 'view' && Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(),'hide_empty') && $this->isEmpty($record)) {
+	final public function createQFfield($form, $mode, $record, $customDefaults, $rb_obj) {
+		if ($mode == 'view' && Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(), 'hide_empty') && $this->isEmpty($record)) {
 			eval_js('var e=jq("#_'.$this->getId().'__data");if(e.length)e.closest("tr").hide();');
 		}
 				
-		$default = ($mode=='add')? ($custom_defaults[$this->getId()]?? ''): ($record[$this->getId()]?? '');
+		$default = $mode == 'add'? ($customDefaults[$this->getId()]?? ''): ($record[$this->getId()]?? '');
 
 		$this->callQFfieldCallback($form, $mode, $default, $rb_obj);
 				
@@ -566,7 +572,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	}
 
 	final public static function getGridCell($record, $nolink, $desc, $admin) {
-		$fieldId = $desc['args'];
+		$fieldId = $desc['field'];
 		
 		if (!$field = $record->getRecordset()->getField($fieldId)) return '&nbsp;';
 		

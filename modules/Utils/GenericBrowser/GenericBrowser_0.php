@@ -509,7 +509,7 @@ class Utils_GenericBrowser extends Module {
 	 * For internal use only.
 	 */
 	public function is_adv_search_on(){
-		return $this->get_module_variable('adv_search',Base_User_SettingsCommon::get('Utils_GenericBrowser','adv_search'));
+		return $this->get_module_variable('adv_search', Base_User_SettingsCommon::get('Utils_GenericBrowser','adv_search'));
 	}
 
 	private function check_if_row_fits_array($row,$adv){

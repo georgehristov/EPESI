@@ -270,9 +270,9 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	$recordset = $this->getRecordset();
 
     	$existing = $recordset->getRecord($this->getId())->toArray();
-    	
+
    		$values = $this->process('edit');
-   		
+
    		if ($values === false) return $this;
 
     	$diff = [];
@@ -298,7 +298,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 			
 			$diff[$field->getId()] = $field->encodeValue($existing[$field->getId()]);
 		}
-		
+
 		if ($diff) {
 			DB::StartTrans();
 			
@@ -344,6 +344,14 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 
     public function restore() {
         return $this->setActive();
+    }
+    
+    public function wasModified($from, $to = null) {
+    	if (!$this->getId()) return false;
+    	
+    	$to = $to?? date('Y-m-d H:i:s');
+    	
+    	return DB::GetOne('SELECT 1 FROM ' . $this->getRecordset()->getTable('history') . ' WHERE edited_on >= %T AND edited_on <= %T AND ' . $this->getTab() . '_id=%d', [$from, $to, $this->getId()]);
     }
 
     public function setActive($state = true) {

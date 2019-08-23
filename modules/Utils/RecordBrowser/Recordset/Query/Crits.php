@@ -120,7 +120,7 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     
     final public static function parseModifiers($key)
     {
-    	$result = preg_split( '/[a-zA-Z:_\[\]]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
+    	$result = preg_split( '/[a-zA-Z:_\[\]0-9\s]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
     	
     	return $result? reset($result): '';
     }

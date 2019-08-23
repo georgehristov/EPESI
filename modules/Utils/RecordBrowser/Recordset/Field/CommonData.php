@@ -110,6 +110,10 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     	return $this->getRecordset()->createQuery(implode(' OR ', $sql), $vals);
     }
     
+    public function getSearchCrits($word) {
+    	return Utils_RecordBrowser_Crits::create(['~'.$this->getId() . '[]' => "%$word%"]);
+    }
+    
     public function getAjaxTooltipOpts() {
     	return [
     			'param' => $this->getParam()

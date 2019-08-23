@@ -339,8 +339,8 @@ class Utils_RecordBrowser_Filters extends Module {
 					break;
 			}
 		}
-
-		$this->crits = Utils_RecordBrowserCommon::merge_crits($this->crits, $filter_crits);
+		
+		$this->crits = Utils_RecordBrowser_Crits::and($this->crits, $filter_crits);
 	}
 	
 	protected function init_active_filters($filters_set = array()) {

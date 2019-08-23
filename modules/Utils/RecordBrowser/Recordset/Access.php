@@ -328,7 +328,11 @@ class Utils_RecordBrowser_Recordset_Access
 	
 	protected function setAction($action)
 	{
-		$this->action = $action;
+		$map = [
+				'history' => 'view'
+		];
+				
+		$this->action = $map[$action]?? $action;
 		
 		return $this;
 	}

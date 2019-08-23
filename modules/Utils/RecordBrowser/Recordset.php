@@ -251,10 +251,12 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		$fields = $this->getFields();
 		
+		$name = Utils_RecordBrowser_Recordset_Query_Crits::stripModifiers($name);
+		
 		$name = preg_match('/^[0-9]+$/', strval($name))? ($this->getPKeyHash($name)?: $name): $name; // numeric
 		
 		$fieldName = isset($fields[$name])? $name: ($this->getHash($name)?: $this->getKeyHash($name));
-
+		
 		if (!$fieldName || !isset($fields[$fieldName])) {
 			if (!$quiet) {
 				trigger_error('Unknown field "'.$name.'" for recordset "'.$this->getTab().'"',E_USER_ERROR);
@@ -378,7 +380,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	public function getIcon() {
 		$icon = $this->getProperty('icon');
 		
-		return $icon?: Base_ThemeCommon::get_template_file($icon)?: Base_ThemeCommon::get_template_file('Base_ActionBar', 'icons/settings.png');
+		return $icon? Base_ThemeCommon::get_template_file($icon): Base_ThemeCommon::get_template_file('Base_ActionBar', 'icons/settings.png');
 	}
 	
 	public function getProperty($name) {
@@ -386,7 +388,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 		
 	public function getProperties() {
-		$this->properties = $this->properties?: DB::GetRow('SELECT caption, icon, recent, favorites, full_history, quickjump FROM recordbrowser_table_properties WHERE tab=%s', [$this->getTab()]);
+		$this->properties = $this->properties?: DB::GetRow('SELECT * FROM recordbrowser_table_properties WHERE tab=%s', [$this->getTab()]);
 		
 		return $this->properties;
 	}
@@ -419,10 +421,14 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return $records;
 	}
 	
-	public function getRecord($id, $htmlspecialchars = true) {
-		if (is_object($id)) return $id;
+	public function getRecord($idOrValuesOrObject, $htmlspecialchars = true) {
+		return $this->createRecord($idOrValuesOrObject)->read($htmlspecialchars);
+	}
+	
+	public function createRecord($idOrValuesOrObject) {
+		if (is_object($idOrValuesOrObject)) return $idOrValuesOrObject;
 		
-		return Utils_RecordBrowser_Recordset_Record::create($this, $id)->read($htmlspecialchars);
+		return Utils_RecordBrowser_Recordset_Record::create($this, $idOrValuesOrObject);
 	}
 	
 	public function addRecord($values = [])
@@ -441,7 +447,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return DB::GetOne($query->getCountSQL(), $query->getValues());
 	}
 	
-	public function getDefaultValues($mode, $customDefaults) {
+	public function getDefaultValues($customDefaults) {
 		$ret = [];
 		foreach($this->getFields() as $field) {
 			$ret[$field->getId()] = $customDefaults[$field->getId()]?? $field->defaultValue();
@@ -457,7 +463,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		$ret = $mode != 'display'? $values: [];
 		
-		$current = $mode=='cloned'? ['original'=>$cloned, 'clone'=>$values]: $values;
+		$current = $mode == 'cloned'? ['original'=>$cloned, 'clone'=>$values]: $values;
 		foreach ($this->getProcessMethods() as $callback) {
 			$return = call_user_func($callback, $current, $mode, $this->getTab());
 
@@ -588,6 +594,10 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 
 	public function getId() {
 		return $this->getProperty('id');
+	}
+	
+	public function getUserFavouriteRecords() {
+		return DB::GetCol('SELECT ' . $this->getTab() . '_id FROM ' . $this->getTab() . '_favorite WHERE user_id=%d', [Acl::get_user()]);
 	}
 }
 

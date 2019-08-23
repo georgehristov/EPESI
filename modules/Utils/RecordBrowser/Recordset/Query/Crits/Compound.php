@@ -44,7 +44,7 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Compound extends Utils_RecordBro
 
         	// if $key is numeric it is stripped, the value is Crits
         	// handy when merging crits in the form of arrays
-        	if (!$this->stripModifiers($key)) {
+        	if (is_numeric($this->stripModifiers($key))) {
         		$component = self::create($value);
         	}
         	else {

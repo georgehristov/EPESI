@@ -294,7 +294,8 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		$vv = explode('::', $value, 2);
 		$ids = null;
 		if(isset($vv[1]) && is_callable($vv)) {
-			$handled_with_php = array('true', array());
+			$handled_with_php = $this->getRecordset()->createQuery('true');
+			
 			if (!$tab2) return $handled_with_php;
 			$callbacks = array(
 					'view' => 'Utils_RecordBrowserCommon::get_recursive_view',
@@ -324,7 +325,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 			foreach ($col2 as $col) {
 				$col = $col[0] == ':' ? $col : self::getFieldId(trim($col));
 				if ($col) {
-					$crits->_or(new Utils_RecordBrowser_CritsSingle($col, $operator, $value, false, $rawSql));
+					Utils_RecordBrowser_Crits::or($crits, Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($col, $value, $operator));
 				}
 			}
 			if (!$crits->isEmpty()) {
@@ -362,7 +363,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		}
 		if ($ids) {
 			if ($this->multiselect) {
-				$q = array();
+				$q = [];
 				foreach ($ids as $id) {
 					$q[] = "$field LIKE '%\\_\\_$id\\_\\_%'";
 				}
@@ -375,6 +376,17 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		}
 		
 		return $this->getRecordset()->createQuery($sql, $vals);
+	}
+	
+	public function getSearchCrits($word) {
+		$ret = [];
+		foreach ($this['param']['cols'] as $fieldId ) {
+			$ret[] = [
+					"~{$this->getId()}[$fieldId]" => "%$word%"
+			];
+		}
+		
+		return Utils_RecordBrowser_Crits::create($ret, true);
 	}
 	
 	public function getAjaxTooltipOpts() {
