@@ -66,8 +66,8 @@ class Utils_TooltipCommon extends ModuleCommon {
 		if(MOBILE_DEVICE) return '';
 		
 		$tooltip_settings = compact('callback', 'args');
-		
-		$tooltip_id = md5(spl_object_hash($tooltip_settings));
+
+		$tooltip_id = md5(serialize($tooltip_settings));
 		
 		$_SESSION['client']['utils_tooltip']['callbacks'][$tooltip_id] = $tooltip_settings;
 		
