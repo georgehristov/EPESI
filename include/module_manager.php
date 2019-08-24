@@ -865,7 +865,8 @@ class ModuleManager {
 		// all commons already loaded by FORCE_CACHE_COMMON_FILES
 		if ($cached) return;
 
-		if (!$commons_with_code = Cache::get('commons_with_code')) {
+		$commons_with_code = Cache::get('commons_with_code');
+		if ($commons_with_code === null) {
 			$commons_with_code = array();
 			foreach ($installed_modules as $row) {
 				$module = $row['name'];

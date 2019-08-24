@@ -1,5 +1,5 @@
-var Utils_ChainedSelect = Class.create();
-Utils_ChainedSelect.prototype = {
+var ChainedSelect = Class.create();
+ChainedSelect.prototype = {
 	prev_ids:null,
 	dest_id:null,
 	params:null,
@@ -74,9 +74,6 @@ Utils_ChainedSelect.prototype = {
 			onSuccess:function(t) {
 				var new_opts = t.responseText.evalJSON();
 				var obj = $(dest_id);
-				if(!jq(obj).is('select')){
-				    return;
-				}
 				var opts = obj.options;
                 if(new_opts == false) {
                     obj.setAttribute("oldDisplayValue", obj.style.display);

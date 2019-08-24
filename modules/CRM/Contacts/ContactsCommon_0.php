@@ -560,7 +560,6 @@ class CRM_ContactsCommon extends ModuleCommon {
                 }
                 uasort($cont, array('CRM_ContactsCommon', 'compare_names'));
             }
-			$label = Utils_RecordBrowserCommon::get_field_tooltip($label, $desc['type'], 'contact', $crits);
             if ($desc['type']=='select') {
                 if (is_numeric($limit)) {
                     unset($cont['']);
@@ -653,9 +652,9 @@ class CRM_ContactsCommon extends ModuleCommon {
             }
         }
         $comp = array();
-        $param = explode(';',$desc['param']);
+        $param = $desc['param'];
         if ($mode=='add' || $mode=='edit') {
-            if (isset($param[1]) && $param[1] != '::') $crits = call_user_func(explode('::',$param[1]),false,isset($rb->record)?$rb->record:null);
+        	if (is_callable($param['crits_callback'])) $crits = call_user_func($param['crits_callback'],false, $rb->record?? null);
             else $crits = array();
             if (isset($crits['_no_company_option'])) {
                 $no_company_option = true;
@@ -686,7 +685,6 @@ class CRM_ContactsCommon extends ModuleCommon {
                 }
                 if ($desc['type']!=='multiselect') $comp = array($key => '---') + $comp;
             }
-			$label = Utils_RecordBrowserCommon::get_field_tooltip($label, $desc['type'], 'company', $crits);
             if ($count>Utils_RecordBrowserCommon::$options_limit) {
                 $callback = array('CRM_ContactsCommon','display_company');
                 if ($desc['type']!=='multiselect')
@@ -853,7 +851,7 @@ class CRM_ContactsCommon extends ModuleCommon {
         if (!Base_AclCommon::i_am_admin()) return;
         if ($mode=='view') {
 			if (!$default) return;
-			if(Base_User_AdministratorCommon::get_log_as_user_access($default)) {
+			if(Base_AclCommon::i_am_sa()) {
 				Base_ActionBarCommon::add('settings', __('Log as user'), Module::create_href(array('log_as_user'=>$default)));
 				if (isset($_REQUEST['log_as_user']) && $_REQUEST['log_as_user']==$default) {
 					Acl::set_user($default, true); //tag who is logged
@@ -1361,13 +1359,18 @@ class CRM_ContactsCommon extends ModuleCommon {
 
     public static function crits_special_values()
     {
-        $ret = array();
         $me = self::get_my_record();
-        $my_contact_id = $me['id'] ? $me['id'] : -1;
+        $my_contact_id = $me['id'] ?: -1;
         $my_company_id = (isset($me['company_name']) && $me['company_name']) ? $me['company_name'] : -1;
-        $ret[] = new Utils_RecordBrowser_ReplaceValue('USER', __('User Contact'), "contact/$my_contact_id");
-        $ret[] = new Utils_RecordBrowser_ReplaceValue('USER_COMPANY', __('User Company'), "company/$my_company_id");
-        return $ret;
+
+        return [
+        		Utils_RecordBrowser_Crits_Placeholder::create('USER', __('User Contact'), "contact/$my_contact_id")->setAvailable(function(Utils_RecordBrowser_Recordset_Field $field) {
+        			return in_array($field->getType(), ['select', 'multiselect']) && in_array('contact', $field['param']['select_tabs']);
+        		}),
+        		Utils_RecordBrowser_Crits_Placeholder::create('USER_COMPANY', __('User Company'), "company/$my_company_id")->setAvailable(function(Utils_RecordBrowser_Recordset_Field $field) {
+        			return in_array($field->getType(), ['select', 'multiselect']) && in_array('company', $field['param']['select_tabs']);
+        		}),
+        ];
     }
 
     //////////////////////////
@@ -1399,6 +1402,6 @@ class CRM_ContactsCommon extends ModuleCommon {
     }
 }
 
-Utils_RecordBrowser_Crits::register_special_value_callback(array('CRM_ContactsCommon', 'crits_special_values'));
+Utils_RecordBrowser_Crits::registerPlaceholderCallback(['CRM_ContactsCommon', 'crits_special_values']);
 
 ?>

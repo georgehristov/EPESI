@@ -36,7 +36,7 @@ class Base_AdminCommon extends ModuleCommon {
 	}
 	
 	public static function get_access($module, $section='', $force_check=false) {
-		if (!$force_check && Acl::i_am_sa()) return true;
+		if (!$force_check && Base_AclCommon::i_am_sa()) return true;
 		static $cache = array();
 		if (!isset($cache[$module])) {
 			$cache[$module] = array();
@@ -47,14 +47,21 @@ class Base_AdminCommon extends ModuleCommon {
 				if ($raws==false) {
 					$defaults[''] = $raws;
 				} else {
+					$defaults[''] = 1;
 					if (is_array($raws))
 						foreach ($raws as $s=>$v) {
-								$defaults[$s] = $v['default']?? 0;
+							if (isset($v['default']))
+								$defaults[$s] = $v['default'];
+							else
+								$defaults[$s] = 0;
 						}
 				}
 			}
 			foreach($defaults as $s=>$v)
-				$cache[$module][$s] = $ret[$s]?? $v;
+				if (isset($ret[$s]))
+					$cache[$module][$s] = $ret[$s];
+				else
+					$cache[$module][$s] = $v;
 		}
 		return $cache[$module][$section];
 	}

@@ -48,7 +48,7 @@ try {
     }
 
     global $account;
-    $account = DB::GetRow('SELECT * FROM rc_accounts_data_1 WHERE id=%d AND active=1',array($id));
+    $account = DB::GetRow('SELECT * FROM crm_mail_accounts_data_1 WHERE id=%d AND active=1',array($id));
     if($E_SESSION['user']!==$account['f_epesi_user']) {
         throw new Exception('Access Denied');
     }

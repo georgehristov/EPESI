@@ -25,44 +25,12 @@ class Utils_LeightboxPrompt extends Module {
 		return $this->group;
 	}
 
-    public function add_option($key, $label, $icon, $form=null, $tooltip=null) {
+    public function add_option($key, $label, $icon, $form=null) {
     	$key = $key?: 'default';
     	
-    	if ($tooltip && !is_array($tooltip))
-    		$tooltip = [$tooltip];
-    	
-        $this->options[$key] = array('icon'=>$icon, 'form'=>$form, 'label'=>$label, 'tooltip'=>$tooltip);
+        $this->options[$key] = array('icon'=>$icon, 'form'=>$form, 'label'=>$label);
         
-        //calling open method causes lbp to not be opened by the links on the page in case of no form validation
-        //this way works because no init is called
-        if (isset($form) && $form->exportValue('submited') && !$form->validate()) Utils_LeightboxPromptCommon::open($this->group, $this->get_params([]));
-    }
-    
-    public function add_options($options) {
-    	foreach ($options as $option => $desc) {
-    		$desc['label'] = $desc['label']?? $option;
-    		
-    		$desc['active'] = $desc['active']?? true;
-    		
-    		$desc['active'] = is_array($desc['active'])? $desc['active']: [$desc['active']];
-    		
-    		if (!(bool) array_product($desc['active'])) continue;
-    		
-    		$form = null;
-    		if ($desc['elements']?? []) {
-    			$form = $this->init_module(Libs_QuickForm::module_name());
-    			
-    			$elements = array_filter($desc['elements'], function($element) {
-    				return $element['active']?? true;
-    			});
-    				
-    			$form->add_array($elements);
-    			
-    			$form->setDefaults($desc['defaults']?? []);
-    		}
-    		
-    		$this->add_option($option, $desc['label'], $desc['icon']?? null, $form, $desc['tip']?? null);
-    	}
+        if (isset($form) && $form->exportValue('submited') && !$form->validate()) $this->open();
     }
     
     public function set_selected_option($option) {
@@ -85,14 +53,13 @@ class Utils_LeightboxPrompt extends Module {
             $buttons = array();
             $sections = array();
             foreach ($this->options as $option_key=>$option) {
-            	$next_button = array('icon'=>$option['icon'], 'label'=>$option['label'], 'tooltip' => $option['tooltip']);
+                $next_button = array('icon'=>$option['icon'], 'label'=>$option['label']);
                 if ($option['form']!==null) $form = $option['form'];
                 else $form = $this->options[$option_key]['form'] = $this->init_module(Libs_QuickForm::module_name());
                 if (!empty($params_list)) {
                     foreach ($params_list as $param_key)
                         $form->addElement('hidden', $this->group.'_'.$param_key, 'none');
                 }
-                $tooltip = $this->button_tooltip_attrs($next_button);
                 if ($option['form']!==null) {
                     $option['form']->addElement('button', 'cancel', __('Cancel'), array('id'=>$this->group.'_lp_cancel', 'onclick'=>$this->get_close_leightbox_href_js(!$single_option)));
                     $option['form']->addElement('submit', 'submit', __('OK'), array('id'=>$this->group.'_lp_submit', 'onclick'=>$this->get_close_leightbox_href_js()));
@@ -102,9 +69,9 @@ class Utils_LeightboxPrompt extends Module {
                     $th->assign('id', $this->get_instance_id());
                     $th->display('form');
                     $form_contents = ob_get_clean();
-                    
-                    $next_button['open'] = '<a ' . $this->get_form_show_href($option_key) . ' ' . $tooltip . '>';
+                    $next_button['open'] = '<a ' . $this->get_form_show_href($option_key) .'>';
                     $sections[] = '<div id="'.$this->group.'_'.$option_key.'_form_section" class="'.$this->group.'_form_section" style="display:none;">'.$form_contents.'</div>';
+
                     if ($this->selected_option ===  $option_key)
                     	$active_option = $option_key; // open this selection if selected_option set
                     
@@ -112,7 +79,7 @@ class Utils_LeightboxPrompt extends Module {
 						$active_option = $option_key; // open this selection if form submitted but not valid
                     
                 } else {
-                    $next_button['open'] = '<a href="javascript:void(0);" onmouseup="' . $this->get_close_leightbox_href_js() . $form->get_submit_form_js() . ';" ' . $tooltip . '>';
+                    $next_button['open'] = '<a href="javascript:void(0);" onmouseup="' . $this->get_close_leightbox_href_js() . $form->get_submit_form_js() . ';">';
                     $form->display();
                 }
                 $next_button['close'] = '</a>';
@@ -139,17 +106,6 @@ class Utils_LeightboxPrompt extends Module {
 
             Libs_LeightboxCommon::display($this->group.'_prompt_leightbox', $profiles_out, $header, $big);
         }
-    }
-    
-    private function button_tooltip_attrs($button) {
-    	$ret = '';
-    	if ($button['tooltip']) {
-    		if (is_callable($button['tooltip'][0]))
-    			$ret = call_user_func_array([Utils_TooltipCommon::class, 'ajax_open_tag_attrs'], $button['tooltip']);
-    		else
-    			$ret = call_user_func_array([Utils_TooltipCommon::class, 'open_tag_attrs'], $button['tooltip']);
-    	}
-    	return $ret;
     }
     
     private function get_single_option() {
@@ -201,10 +157,6 @@ class Utils_LeightboxPrompt extends Module {
         if (!$this->init) print('<a style="display:none;" '.$this->get_href().'></a>');
         $this->init=true;
 	}
-	
-	public function get_options_count() {
-        return count($this->options);
-	}
 
     public function get_close_leightbox_href($reset_view = false) {
         return 'href="javascript:void(0)" onclick="' . $this->get_close_leightbox_href_js($reset_view) . '"';
@@ -219,7 +171,7 @@ class Utils_LeightboxPrompt extends Module {
         foreach ($this->options as $option_key=>$option) {
             if ($option['form']!==null && $option['form']->validate()) {
                 $ret['option'] = $option_key;
-                $vals = array_merge($option['form']->exportValues(), Utils_FileUpload_Dropzone::export_values($option['form']));
+                $vals = $option['form']->exportValues();
                 if (is_array($this->params_list)) foreach ($this->params_list as $p) {
                     $ret['params'][$p] = $vals[$this->group.'_'.$p];
                     unset($vals[$this->group.'_'.$p]);

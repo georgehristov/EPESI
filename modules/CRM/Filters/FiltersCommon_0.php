@@ -45,14 +45,14 @@ class CRM_FiltersCommon extends ModuleCommon {
 	}
 
 	public static function set_profile($prof) {
-		if(preg_match('/^c([0-9,]+)$/',$prof,$reqs)) {
-			$ret = $reqs[1];
+		$matches = [];
+		if (preg_match('/^c([0-9,]+)$/', $prof, $matches)) {
+			$ret = $matches[1];
 			if(strpos($ret,',')===false)
 				$desc = CRM_ContactsCommon::contact_format_no_company($ret,true);
 			else
 				$desc = __('Custom filter');
 		} elseif(is_numeric($prof)) {
-			$cids = DB::GetAssoc('SELECT contact_id, contact_id FROM crm_filters_contacts');
 			$c = DB::GetCol('SELECT p.contact_id FROM crm_filters_contacts p WHERE p.group_id=%d',array($prof));
 			if($c)
 				$ret = implode(',',$c);
@@ -84,17 +84,16 @@ class CRM_FiltersCommon extends ModuleCommon {
 	public static function crits_special_values()
 	{
 		$perspective = trim(CRM_FiltersCommon::get(), '()');
-		$perspective = empty($perspective) ? null : explode(',', $perspective);
-		if (is_array($perspective)) {
-			foreach ($perspective as $k => $value) {
-				$perspective[$k] = 'contact/' . $value;
-			}
+		
+		$perspective = $perspective? explode(',', $perspective): [];
+		foreach ($perspective as $k => $value) {
+			$perspective[$k] = 'contact/' . $value;
 		}
 
-		return new Utils_RecordBrowser_ReplaceValue('__PERSPECTIVE__', __('Perspective'), $perspective, true);
+		return Utils_RecordBrowser_Crits_Placeholder::create('__PERSPECTIVE__', __('Perspective'), $perspective)->setDeactivateCritOnNull();
 	}
 }
 
-Utils_RecordBrowser_Crits::register_special_value_callback(array('CRM_FiltersCommon', 'crits_special_values'));
+Utils_RecordBrowser_Crits::registerPlaceholderCallback(['CRM_FiltersCommon', 'crits_special_values']);
 
 ?>

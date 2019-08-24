@@ -194,10 +194,10 @@ class Utils_GenericBrowser extends Module {
 	public function __add_row_action($num,$tag_attrs,$label,$tooltip,$icon,$order=0,$off=false,$size=1) {
 		if (!isset($icon)) $icon = strtolower(trim($label));
 		switch ($icon) {
-			case 'view': $order = $order?: -3; break;
-			case 'edit': $order = $order?: -2; break;
-			case 'delete': $order = $order?: -1; break;
-			case 'info': $order = $order?: 1000; break;
+			case 'view': $order = -3; break;
+			case 'edit': $order = -2; break;
+			case 'delete': $order = -1; break;
+			case 'info': $order = 1000; break;
 		}
 		$this->actions[$num][$icon] = array('tag_attrs'=>$tag_attrs,'label'=>$label,'tooltip'=>$tooltip, 'off'=>$off, 'size'=>$size, 'order'=>$order);
 		$this->en_actions = true;
@@ -509,7 +509,7 @@ class Utils_GenericBrowser extends Module {
 	 * For internal use only.
 	 */
 	public function is_adv_search_on(){
-		return $this->get_module_variable('adv_search',Base_User_SettingsCommon::get('Utils_GenericBrowser','adv_search'));
+		return $this->get_module_variable('adv_search', Base_User_SettingsCommon::get('Utils_GenericBrowser','adv_search'));
 	}
 
 	private function check_if_row_fits_array($row,$adv){

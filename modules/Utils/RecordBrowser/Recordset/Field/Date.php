@@ -1,0 +1,78 @@
+<?php
+
+defined("_VALID_ACCESS") || die('Direct access forbidden');
+
+class Utils_RecordBrowser_Recordset_Field_Date extends Utils_RecordBrowser_Recordset_Field {
+	
+	public static function typeKey() {
+		return 'date';
+	}
+	
+	public static function typeLabel() {
+		return _M('Date');
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return array_merge(parent::gridColumnOptions($recordBrowser), [
+				'quickjump' => true,
+				'search_type' => 'datepicker',
+				'wrapmode' => !$recordBrowser->addInTableEnabled()? 'nowrap': false,
+				'width' => $recordBrowser->addInTableEnabled()? 100: 50
+		]);
+	}
+	
+    public function handleCrits($field, $operator, $value) {
+    	$field = $this->getQueryId();
+    	 
+    	if ($operator == DB::like()) {
+            if (DB::is_postgresql()) $field .= '::varchar';
+            return ["$field $operator %s", [$value]];
+        }
+        $vals = array();
+        if (!$value) {
+            $sql = "$field IS NULL";
+        } else {
+            $null_part = ($operator == '<' || $operator == '<=') ?
+                " OR $field IS NULL" :
+                " AND $field IS NOT NULL";
+            $value = Base_RegionalSettingsCommon::reg2time($value, false);
+            $sql = "($field $operator %D $null_part)";
+            $vals[] = $value;
+        }
+        return [$sql, $vals];
+    }
+    
+    public static function getAjaxTooltip($opts) {
+    	return __('Enter the date in your selected format') . '<br />' .
+      		__('Click on the text field to bring up a popup Calendar that allows you to pick the date') . '<br />' .
+    		__('Click again on the text field to close popup Calendar');
+    }
+    
+    public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
+    	$ret = '';
+    	if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
+    		$ret = Base_RegionalSettingsCommon::time2reg($record[$desc['id']], false, true, false);
+    	}
+    	
+    	return $ret;
+    }
+    
+    public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
+    	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
+    		return;
+    		
+  		$form->addElement('datepicker', $field, $label, ['id' => $field]);
+   		if ($mode !== 'add')
+   			$form->setDefaults([$field => $default]);
+    }
+    
+    public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+    	$critsCheck = clone $crits;
+    	
+    	$crit_value = Base_RegionalSettingsCommon::reg2time($critsCheck->getValue()->getValue(), false);
+    	
+    	$critsCheck->getValue()->setValue(date('Y-m-d', $crit_value));
+    	
+    	return parent::validate($record, $critsCheck);
+    }
+}

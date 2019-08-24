@@ -11,14 +11,12 @@
         "memio/memio": "^1.0",
         "psy/psysh": "@stable",
         "enyo/dropzone": "@stable",
-        "ezyang/htmlpurifier": "^4.9",
-        "moneyphp/money": "^3.0"
+        "ezyang/htmlpurifier": "^4.9"
     },
     "scripts": {
         "post-install-cmd": [
             "@composer -d=\"modules/CRM/Mail\" install",
-            "@composer -d=\"modules/Libs/PHPExcel\" install",
-            "@composer -d=\"modules/Libs/TCPDF\" install"
+            "@composer -d=\"modules/Libs/PHPExcel\" install"
         ]
     },
     "autoload": {

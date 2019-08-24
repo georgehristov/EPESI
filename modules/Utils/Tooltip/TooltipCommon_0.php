@@ -65,7 +65,8 @@ class Utils_TooltipCommon extends ModuleCommon {
 	public static function ajax_open_tag_attrs( $callback, $args, $max_width=300 ) {
 		if(MOBILE_DEVICE) return '';
 		
-		$tooltip_settings = array('callback'=>$callback, 'args'=>$args);
+		$tooltip_settings = compact('callback', 'args');
+
 		$tooltip_id = md5(serialize($tooltip_settings));
 		
 		$_SESSION['client']['utils_tooltip']['callbacks'][$tooltip_id] = $tooltip_settings;
@@ -122,12 +123,7 @@ class Utils_TooltipCommon extends ModuleCommon {
 			$table.='</td></tr>';
 		}
 		$table.='</table>';
-
-        $config = HTMLPurifier_Config::createDefault();
-        $purifier = new HTMLPurifier($config);
-        $return = $purifier->purify($table);
-
-		return $return;
+		return $table;
 	}
 
 	public static function tooltip_leightbox_mode() {

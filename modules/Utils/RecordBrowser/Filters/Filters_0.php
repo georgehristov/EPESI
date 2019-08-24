@@ -14,6 +14,7 @@ class Utils_RecordBrowser_Filters extends Module {
 	/** @var Utils_RecordBrowser */
 	private $rb_obj;
 	private $tab;
+	private $recordset;
 	private $filter_field_crits;
 	private $active_filters = array();
 	private $custom_filters = array();
@@ -21,7 +22,6 @@ class Utils_RecordBrowser_Filters extends Module {
 	private $external_filter_elements = array();
 	private $values = array();
 	private $clear_filters = false;
-	private $table_rows;
 	private $form;
 	private $crits = array();
 	private static $empty_value = '__NULL__';
@@ -30,17 +30,21 @@ class Utils_RecordBrowser_Filters extends Module {
 		return array(self::$empty_value=>'---');
 	}
 	
-	public function construct($rb_obj, $filter_field_crits = array(), $custom_filters = array()) {
+	public function construct(Utils_RecordBrowser $rb_obj, $filter_field_crits = array(), $custom_filters = array()) {
 		if (!($rb_obj instanceof Utils_RecordBrowser))
 			trigger_error('Cannot construct filters, $rb_obj must be instance of Utils_RecordBrowser:' . $this->get_path() . '.', E_USER_ERROR);
 				
 		$this->rb_obj = $rb_obj;
-		$this->tab = $rb_obj->tab;
+		$this->tab = $rb_obj->getTab();
+		$this->recordset = $rb_obj->getRecordset();
 		$this->filter_field_crits = $filter_field_crits;
 		$this->custom_filters = $custom_filters;
-		$this->table_rows = Utils_RecordBrowserCommon::init($this->tab);
 	}
 
+	public function getRecordset() {
+		return $this->recordset;
+	}
+	
 	public function get_filters_html($clear_filters = false, $filters_set = array(), $filter_group_id='') {
 		if (!$this->get_access('browse')) return;
 	
@@ -49,7 +53,7 @@ class Utils_RecordBrowser_Filters extends Module {
 		$this->process_filters($filters_set);
 	
 		$filter_group_elements = $this->get_filter_elements();
-	
+
 		if (!$filter_group_elements) return;
 	
 		$filter_group = array(
@@ -104,16 +108,16 @@ class Utils_RecordBrowser_Filters extends Module {
 	protected function set_standard_filter_values() {
 		$this->form = $this->init_module(Libs_QuickForm::module_name(), null, $this->tab.'filters');
 		
-		$this->standard_filter_elements = array();
+		$this->standard_filter_elements = [];
 		foreach ($this->active_filters as $filter_name) {
 			$filter_id = self::get_filter_id($filter_name);
 			$element_id = self::get_element_id($filter_id);
 		
 			if ($this->set_custom_filter($filter_name, $element_id)) continue;
-		
+			
 			$filter_label = $this->get_filter_label($filter_name);
 			$field_type = $this->get_field_type($filter_name);
-			$desc = $this->table_rows[$filter_name];
+			$desc = $this->getRecordset()->getField($filter_name);
 
 			switch ($field_type) {
 				case 'timestamp':
@@ -178,6 +182,7 @@ class Utils_RecordBrowser_Filters extends Module {
 		
 				case 'select':
 				case 'multiselect':
+				case 'multicommondata':
 					$autoselect = false;
 					$select_options = array();
 		
@@ -284,7 +289,7 @@ class Utils_RecordBrowser_Filters extends Module {
 			
 			if (in_array($element_id, $this->external_filter_elements)) continue;
 			
-			$desc = $this->table_rows[$filter_name];
+			$desc = $this->getRecordset()->getField($filter_name);
 		
 			if ($this->set_custom_filter_crits($filter_name, $element_id)) continue;
 			
@@ -334,20 +339,20 @@ class Utils_RecordBrowser_Filters extends Module {
 					break;
 			}
 		}
-
-		$this->crits = Utils_RecordBrowserCommon::merge_crits($this->crits, $filter_crits);
+		
+		$this->crits = Utils_RecordBrowser_Crits::and($this->crits, $filter_crits);
 	}
 	
 	protected function init_active_filters($filters_set = array()) {
 		$access = $this->get_access('view');
 		
 		$this->active_filters = array();
-		foreach ($this->table_rows as $field_name=>$desc) {
-			$field_id = $desc['id'];
+		foreach ($this->getRecordset()->getFields() as $field) {
+			$field_id = $field['id'];
 			if (!isset($access[$field_id]) || !$access[$field_id]) continue;
 			
-			if ((!isset($filters_set[$field_id]) && $desc['filter']) || (isset($filters_set[$field_id]) && $filters_set[$field_id])) {
-				$this->active_filters[] = $field_name;
+			if ((!isset($filters_set[$field_id]) && $field['filter']) || (isset($filters_set[$field_id]) && $filters_set[$field_id])) {
+				$this->active_filters[] = $field->getId();
 				if (isset($filters_set[$field_id])) {
 					unset($filters_set[$field_id]);
 				}
@@ -459,17 +464,13 @@ class Utils_RecordBrowser_Filters extends Module {
 	}
 	
 	public function get_field_type($filter_name) {
-		$desc = $this->table_rows[$filter_name];
+		$desc = $this->getRecordset()->getField($filter_name);
 		
 		return ($desc['type'] == 'calculated' && $desc['param'] != '')? $desc['style']: $desc['type'];
 	}
 	
 	public function get_filter_label($filter_name) {
-		$desc = $this->table_rows[$filter_name];
-		
-		$ret = !empty($desc['caption'])? $desc['caption']: $desc['name'];
-		
-		return _V($ret);
+		return $this->getRecordset()->getField($filter_name)->getLabel();
 	}
 	
 	public static function get_filter_id($filter_name) {

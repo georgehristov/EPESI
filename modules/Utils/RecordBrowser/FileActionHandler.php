@@ -35,33 +35,11 @@ class Utils_RecordBrowser_FileActionHandler
         if (!($tab && $recordId && $field && $filestorageId)) {
             return false;
         }
-
-        $access = $this->checkRecordAccess($tab, $recordId, $field, $filestorageId);
-        return $access;
+        
+        $record = Utils_RecordBrowser_Recordset::create($tab)->getRecord($recordId);
+        
+        if (! $field = $record->getRecordset()->getField($field)) return false;
+        
+        return $record->getUserFieldAccess($field) && in_array($filestorageId, $record[$field->getId()]);
     }
-
-    protected function checkRecordAccess($tab, $recordId, $field, $filestorageId)
-    {
-        $record = Utils_RecordBrowserCommon::get_record_respecting_access($tab, $recordId);
-        $fieldId = $this->getFieldId($tab, $field);
-        $access = $fieldId && $record
-            && isset($record[$fieldId]) && !is_null($record[$fieldId])
-            && in_array($filestorageId, $record[$fieldId]);
-        return $access;
-    }
-
-    private function getFieldId($tab, $field)
-    {
-        if (preg_match('/^[0-9]+$/', strval($field))) { // is integer
-            $fields = Utils_RecordBrowserCommon::init($tab);
-            foreach ($fields as $def) {
-                if ($def['pkey'] == $field) {
-                    return $def['id'];
-                }
-            }
-            return false;
-        }
-        return $field;
-    }
-
 }
