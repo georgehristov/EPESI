@@ -19,6 +19,9 @@ modules/*
 
 # IDE dirs/files
 .idea
+.buildpath
+.project
+
 
 Thumbs.db
 
