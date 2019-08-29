@@ -60,6 +60,10 @@ class Utils_RecordBrowser_Recordset_Field_Currency extends Utils_RecordBrowser_R
     	return __('Enter the amount in text field and select currency');
     }
     
+    public static function defaultStyle() {
+    	return 'currency';
+    }
+    
     public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
     	$ret = '';
     	if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
@@ -84,5 +88,16 @@ class Utils_RecordBrowser_Recordset_Field_Currency extends Utils_RecordBrowser_R
     		$default = $form->exportValue($field);
     		$form->getElement($field)->setValue($default);
     	}
+    }
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'double'
+    			]
+    	];
     }
 }

@@ -24,4 +24,19 @@ class Utils_RecordBrowser_Recordset_Field_Special_Sub extends Utils_RecordBrowse
 	public function processGet($values, $options = []) {
 		return [];
 	}
+	
+	public function queryBuilderFilters($opts = []) {
+		if (! Utils_WatchdogCommon::get_category_id($this->getTab())) return;
+		
+		return [
+				[
+						'id' => ':Sub',
+						'field' => ':Sub',
+						'label' => __('Subscribed'),
+						'type' => 'boolean',
+						'input' => 'select',
+						'values' => ['1' => __('Yes'), '0' => __('No')]
+				]
+		];
+	}
 }

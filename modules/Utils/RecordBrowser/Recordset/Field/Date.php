@@ -48,6 +48,10 @@ class Utils_RecordBrowser_Recordset_Field_Date extends Utils_RecordBrowser_Recor
     		__('Click again on the text field to close popup Calendar');
     }
     
+    public function isDescriptive() {
+    	return $this->isVisible() && $this->isRequired();
+    }
+    
     public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
     	$ret = '';
     	if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
@@ -66,13 +70,66 @@ class Utils_RecordBrowser_Recordset_Field_Date extends Utils_RecordBrowser_Recor
    			$form->setDefaults([$field => $default]);
     }
     
-    public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+    public function validate(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $value) {
     	$critsCheck = clone $crits;
     	
     	$crit_value = Base_RegionalSettingsCommon::reg2time($critsCheck->getValue()->getValue(), false);
     	
     	$critsCheck->getValue()->setValue(date('Y-m-d', $crit_value));
     	
-    	return parent::validate($record, $critsCheck);
+    	return parent::validate($critsCheck, $value);
     }
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'date',
+    					'plugin' => 'datepicker',
+    					'plugin_config' => ['dateFormat' => 'yy-mm-dd', 'constrainInput' => false],
+    			],
+    			[
+    					'id' => $this->getId() . '_relative',
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel() . ' (' . __('relative') . ')',
+    					'type' => 'date',
+    					'input' => 'select',
+    					'values' => self::getDateValues()
+    			]
+    	];
+    }
+    
+    public static function getDateValues() {
+    	return [
+    			'-1 year' => __('1 year back'),
+    			'-6 months' => __('6 months back'),
+    			'-3 months' => __('3 months back'),
+    			'-2 months' => __('2 months back'),
+    			'-1 month' => __('1 month back'),
+    			'-2 weeks' => __('2 weeks back'),
+    			'-1 week' => __('1 week back'),
+    			'-6 days' => __('6 days back'),
+    			'-5 days' => __('5 days back'),
+    			'-4 days' => __('4 days back'),
+    			'-3 days' => __('3 days back'),
+    			'-2 days' => __('2 days back'),
+    			'-1 days' => __('1 days back'),
+    			'today' => __('current day'),
+    			'+1 days' => __('1 days forward'),
+    			'+2 days' => __('2 days forward'),
+    			'+3 days' => __('3 days forward'),
+    			'+4 days' => __('4 days forward'),
+    			'+5 days' => __('5 days forward'),
+    			'+6 days' => __('6 days forward'),
+    			'+1 week' => __('1 week forward'),
+    			'+2 weeks' => __('2 weeks forward'),
+    			'+1 month' => __('1 month forward'),
+    			'+2 months' => __('2 months forward'),
+    			'+3 months' => __('3 months forward'),
+    			'+6 months' => __('6 months forward'),
+    			'+1 year' => __('1 year forward')
+    	];
+    }	
 }

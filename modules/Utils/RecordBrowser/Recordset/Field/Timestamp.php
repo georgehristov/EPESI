@@ -48,6 +48,10 @@ class Utils_RecordBrowser_Recordset_Field_Timestamp extends Utils_RecordBrowser_
     		__('You can change 12/24-hour format in Control Panel, Regional Settings');
     }
     
+    public static function defaultStyle() {
+    	return 'timestamp';
+    }
+    
     public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
     	$ret = '';
     	if (isset($desc['id']) && isset($record[$desc['id']]) && $record[$desc['id']]!=='') {
@@ -79,13 +83,34 @@ class Utils_RecordBrowser_Recordset_Field_Timestamp extends Utils_RecordBrowser_
 		));
 	}
 	
-	public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
+	public function validate(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $value) {
 		$critsCheck = clone $crits;
 		
 		$crit_value = Base_RegionalSettingsCommon::reg2time($critsCheck->getValue()->getValue(), false);
 		
 		$critsCheck->getValue()->setValue(date('Y-m-d H:i:s', $crit_value));
 		
-		return parent::validate($record, $critsCheck);
+		return parent::validate($critsCheck, $value);
+	}
+	
+	public function queryBuilderFilters($opts = []) {
+		return [
+				[
+						'id' => $this->getId(),
+						'field' => $this->getId(),
+						'label' => $this->getLabel(),
+						'type' => 'datetime',
+						'plugin' => 'datepicker',
+						'plugin_config' => ['dateFormat' => 'yy-mm-dd', 'constrainInput' => false],
+				],
+				[
+						'id' => $this->getId() . '_relative',
+						'field' => $this->getId(),
+						'label' => $this->getLabel() . ' (' . __('relative') . ')',
+						'type' => 'date',
+						'input' => 'select',
+						'values' => Utils_RecordBrowser_Recordset_Field_Date::getDateValues()
+				]
+		];
 	}
 }

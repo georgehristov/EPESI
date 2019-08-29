@@ -30,4 +30,17 @@ class Utils_RecordBrowser_Recordset_Field_Special_Fav extends Utils_RecordBrowse
 	public function processGet($values, $options = []) {
 		return [];
 	}
+	
+	public function queryBuilderFilters($opts = []) {
+		return [
+				[
+						'id' => ':Fav',
+						'field' => ':Fav',
+						'label' => __('Favorite'),
+						'type' => 'boolean',
+						'input' => 'select',
+						'values' => ['1' => __('Yes'), '0' => __('No')]
+				]
+		];
+	}
 }

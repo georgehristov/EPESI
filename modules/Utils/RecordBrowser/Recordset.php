@@ -22,6 +22,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	protected $arrayKeys;
 	protected $callbacks;
 	protected $addons;
+	protected static $datatypes;
 		
 	/**
 	 * @param string $tab
@@ -66,8 +67,8 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	public static function install($tab, $fields=[]) {
 		if (!self::validateName($tab)) trigger_error('Invalid table name ('.$tab.') given to install_new_recordset.',E_USER_ERROR);
 		if (strlen($tab)>39) trigger_error('Invalid table name ('.$tab.') given to install_new_recordset, max length is 39 characters.',E_USER_ERROR);
-		if (!DB::GetOne('SELECT 1 FROM recordbrowser_table_properties WHERE tab=%s', array($tab))) {
-			DB::Execute('INSERT INTO recordbrowser_table_properties (tab) VALUES (%s)', array($tab));
+		if (!DB::GetOne('SELECT 1 FROM recordbrowser_table_properties WHERE tab=%s', [$tab])) {
+			DB::Execute('INSERT INTO recordbrowser_table_properties (tab) VALUES (%s)', [$tab]);
 		}
 		
 		@DB::DropTable($tab.'_callback');
@@ -100,69 +101,128 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 				'style C(64),'.
 				'template C(255),'.
 				'help X',
-				array('constraints'=>''));
+				['constraints'=>'']);
+		
 		DB::CreateTable($tab.'_callback',
 				'field C(32),'.
 				'callback C(255),'.
 				'freezed I1',
-				array('constraints'=>''));
+				['constraints'=>'']);
 		
 		DB::Execute('INSERT INTO '.$tab.'_field(field, type, extra, visible, position, processing_order) VALUES(\'id\', \'foreign index\', 0, 0, 1, 1)');
 		DB::Execute('INSERT INTO '.$tab.'_field(field, type, extra, position, processing_order) VALUES(\'General\', \'page_split\', 0, 2, 2)');
 		
 		$fields_sql = '';
-		foreach ($fields as $v)
+		foreach ( $fields as $v ) {
 			$fields_sql .= Utils_RecordBrowserCommon::new_record_field($tab, $v, false, false);
-			DB::CreateTable($tab.'_data_1',
-					'id I AUTO KEY,'.
-					'created_on T NOT NULL,'.
-					'created_by I NOT NULL,'.
-					'indexed I1 NOT NULL DEFAULT 0,'.
-					'active I1 NOT NULL DEFAULT 1'.
-					$fields_sql,
-					array('constraints'=>''));
-			DB::CreateIndex($tab.'_idxed',$tab.'_data_1','indexed,active');
-			DB::CreateIndex($tab.'_act',$tab.'_data_1','active');
-			
-			DB::CreateTable($tab.'_edit_history',
-					'id I AUTO KEY,'.
-					$tab.'_id I NOT NULL,'.
-					'edited_on T NOT NULL,'.
-					'edited_by I NOT NULL',
-					array('constraints'=>', FOREIGN KEY (edited_by) REFERENCES user_login(id), FOREIGN KEY ('.$tab.'_id) REFERENCES '.$tab.'_data_1(id)'));
-			DB::CreateTable($tab.'_edit_history_data',
-					'edit_id I,'.
-					'field C(32),'.
-					'old_value X',
-					array('constraints'=>', FOREIGN KEY (edit_id) REFERENCES '.$tab.'_edit_history(id)'));
-			DB::CreateTable($tab.'_favorite',
-					'fav_id I AUTO KEY,'.
-					$tab.'_id I,'.
-					'user_id I',
-					array('constraints'=>', FOREIGN KEY (user_id) REFERENCES user_login(id), FOREIGN KEY ('.$tab.'_id) REFERENCES '.$tab.'_data_1(id)'));
-			DB::CreateTable($tab.'_recent',
-					'recent_id I AUTO KEY,'.
-					$tab.'_id I,'.
-					'user_id I,'.
-					'visited_on T',
-					array('constraints'=>', FOREIGN KEY (user_id) REFERENCES user_login(id), FOREIGN KEY ('.$tab.'_id) REFERENCES '.$tab.'_data_1(id)'));
-			DB::CreateTable($tab.'_access',
-					'id I AUTO KEY,'.
-					'action C(16),'.
-					'crits X',
-					array('constraints'=>''));
-			DB::CreateTable($tab.'_access_fields',
-					'rule_id I,'.
-					'block_field C(32)',
-					array('constraints'=>', FOREIGN KEY (rule_id) REFERENCES '.$tab.'_access(id)'));
-			DB::CreateTable($tab.'_access_clearance',
-					'rule_id I,'.
-					'clearance C(32)',
-					array('constraints'=>', FOREIGN KEY (rule_id) REFERENCES '.$tab.'_access(id)'));
-			self::exists($tab, true);
-			self::add_access($tab, 'print', 'SUPERADMIN');
-			self::add_access($tab, 'export', 'SUPERADMIN');
+		}
+		
+		DB::CreateTable($tab . '_data_1', 
+				'id I AUTO KEY,' . 
+				'created_on T NOT NULL,' . 
+				'created_by I NOT NULL,' . 
+				'indexed I1 NOT NULL DEFAULT 0,' . 
+				'active I1 NOT NULL DEFAULT 1' . $fields_sql, [
+				'constraints' => ''
+		]);
+
+		DB::CreateIndex($tab . '_idxed', $tab . '_data_1', 'indexed,active');
+		DB::CreateIndex($tab . '_act', $tab . '_data_1', 'active');
+
+		DB::CreateTable($tab . '_edit_history', 
+				'id I AUTO KEY,' . $tab . 
+				'_id I NOT NULL,' . 
+				'edited_on T NOT NULL,' . 
+				'edited_by I NOT NULL', [
+				'constraints' => ', FOREIGN KEY (edited_by) REFERENCES user_login(id), FOREIGN KEY (' . $tab . '_id) REFERENCES ' . $tab . '_data_1(id)'
+		]);
+		DB::CreateTable($tab . '_edit_history_data', 
+				'edit_id I,' . 
+				'field C(32),' . 
+				'old_value X',[
+				'constraints' => ', FOREIGN KEY (edit_id) REFERENCES ' . $tab . '_edit_history(id)'
+		]);
+		DB::CreateTable($tab . '_favorite', 
+				'fav_id I AUTO KEY,' . 
+				$tab . '_id I,' . 
+				'user_id I', [
+				'constraints' => ', FOREIGN KEY (user_id) REFERENCES user_login(id), FOREIGN KEY (' . $tab . '_id) REFERENCES ' . $tab . '_data_1(id)'
+		]);
+		DB::CreateTable($tab . '_recent', 
+				'recent_id I AUTO KEY,' . 
+				$tab . '_id I,' . 
+				'user_id I,' . 
+				'visited_on T', [
+				'constraints' => ', FOREIGN KEY (user_id) REFERENCES user_login(id), FOREIGN KEY (' . $tab . '_id) REFERENCES ' . $tab . '_data_1(id)'
+		]);
+		DB::CreateTable($tab . '_access', 
+				'id I AUTO KEY,' . 
+				'action C(16),' . 
+				'crits X', [
+				'constraints' => ''
+		]);
+		DB::CreateTable($tab . '_access_fields', 
+				'rule_id I,' . 
+				'block_field C(32)', [
+				'constraints' => ', FOREIGN KEY (rule_id) REFERENCES ' . $tab . '_access(id)'
+		]);
+		DB::CreateTable($tab . '_access_clearance', 
+				'rule_id I,' . 
+				'clearance C(32)', [
+				'constraints' => ', FOREIGN KEY (rule_id) REFERENCES ' . $tab . '_access(id)'
+		]);
+		
+		self::exists($tab, true);
+		Utils_RecordBrowserCommon::add_access($tab, 'print', 'SUPERADMIN');
+		Utils_RecordBrowserCommon::add_access($tab, 'export', 'SUPERADMIN');
+		
 		return true;
+	}
+	
+	public static function uninstall($tab) {
+		if (!self::exists($tab,true)) return;
+		
+		Utils_WatchdogCommon::unregister_category($tab);
+		DB::DropTable($tab.'_callback');
+		DB::DropTable($tab.'_recent');
+		DB::DropTable($tab.'_favorite');
+		DB::DropTable($tab.'_edit_history_data');
+		DB::DropTable($tab.'_edit_history');
+		DB::DropTable($tab.'_field');
+		DB::DropTable($tab.'_data_1');
+		DB::DropTable($tab.'_access_clearance');
+		DB::DropTable($tab.'_access_fields');
+		DB::DropTable($tab.'_access');
+		DB::Execute('DELETE FROM recordbrowser_table_properties WHERE tab=%s', [$tab]);
+		DB::Execute('DELETE FROM recordbrowser_processing_methods WHERE tab=%s', [$tab]);
+		DB::Execute('DELETE FROM recordbrowser_browse_mode_definitions WHERE tab=%s', [$tab]);
+		DB::Execute('DELETE FROM recordbrowser_clipboard_pattern WHERE tab=%s', [$tab]);
+		DB::Execute('DELETE FROM recordbrowser_addon WHERE tab=%s', [$tab]);
+		DB::Execute('DELETE FROM recordbrowser_access_methods WHERE tab=%s', [$tab]);
+		
+		return true;
+	}
+	
+	public static function registerDatatype($type, $module, $func) {
+		if(self::$datatypes!==null) self::$datatypes[$type] = [$module, $func];
+		DB::Execute('INSERT INTO recordbrowser_datatype (type, module, func) VALUES (%s, %s, %s)', [$type, $module, $func]);
+	}
+	public static function unregisterDatatype($type) {
+		if (self::$datatypes!==null) unset(self::$datatypes[$type]);
+		DB::Execute('DELETE FROM recordbrowser_datatype WHERE type=%s', [$type]);
+	}
+	
+	public static function getDatatypes() {
+		if (!isset(self::$datatypes)) {			
+			$result = DB::Execute('SELECT * FROM recordbrowser_datatype');
+			
+			self::$datatypes = [];
+			while ($row = $result->FetchRow()) {
+				self::$datatypes[$row['type']] = [$row['module'], $row['func']];
+			}
+		}
+		
+		return self::$datatypes;
 	}
 	
 	protected function __construct($tab) {
@@ -358,19 +418,15 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 	
 	public function getAddons() {
-		if (!isset($this->addons)) {
-			$this->addons = DB::GetAll('SELECT * FROM recordbrowser_addon WHERE tab=%s ORDER BY pos', [$this->getTab()]);
-		}
-		
-		return $this->addons;
+		return $this->addons = $this->addons?? DB::GetAll('SELECT * FROM recordbrowser_addon WHERE tab=%s ORDER BY pos', [$this->getTab()]);
 	}
 	
 	public function getPrinter() {
-		$class = DB::GetOne('SELECT printer FROM recordbrowser_table_properties WHERE tab=%s', $this->getTab());
-		if($class && class_exists($class))
-			return new $class();
+		$class = $this->getProperty('printer');
 		
-		return new Utils_RecordBrowser_RecordPrinter();
+		$class = $class && class_exists($class)? $class: Utils_RecordBrowser_RecordPrinter::class;
+		
+		return new $class();
 	}
 		
 	public function getCaption() {
@@ -388,9 +444,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 		
 	public function getProperties() {
-		$this->properties = $this->properties?: DB::GetRow('SELECT * FROM recordbrowser_table_properties WHERE tab=%s', [$this->getTab()]);
-		
-		return $this->properties;
+		return $this->properties = $this->properties?: DB::GetRow('SELECT * FROM recordbrowser_table_properties WHERE tab=%s', [$this->getTab()]);
 	}
 		
 	public function getClipboardPattern($with_state = false) {
@@ -402,6 +456,41 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		}
 
 		return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
+	}
+	
+	/**
+	 * Method to manipulate clipboard pattern
+	 * 
+	 * @param string|null 		$pattern pattern, or when it's null the pattern stays the same, only enable state changes
+	 * @param bool 				$enabled new enabled state of clipboard pattern
+	 * @param bool 				$force make it true to allow any changes or overwrite when clipboard pattern exist
+	 * @return bool 			true if any changes were made, false otherwise
+	 */
+	public function setClipboardPattern($pattern, $enabled = true, $force = false) {
+		$tab = $this->getTab();
+		
+		$ret = null;
+		$enabled = $enabled ? 1 : 0;
+		$existing = $this->getClipboardPattern(true);
+		
+		/* when pattern exists and i can overwrite it... */
+		if($existing && $force) {
+			/* just change enabled state, when pattern is null */
+			if($pattern === null) {
+				$ret = DB::Execute('UPDATE recordbrowser_clipboard_pattern SET enabled=%d WHERE tab=%s', [$enabled, $tab]);
+			} else {
+				/* delete if it's not necessary to hold any value */
+				if($enabled == 0 && strlen($pattern) == 0) $ret = DB::Execute('DELETE FROM recordbrowser_clipboard_pattern WHERE tab = %s', [$tab]);
+				/* or update values */
+				else $ret = DB::Execute('UPDATE recordbrowser_clipboard_pattern SET pattern=%s,enabled=%d WHERE tab=%s',[$pattern,$enabled,$tab]);
+			}
+		}
+		/* there is no such pattern in database so create it*/
+		if(!$existing) {
+			$ret = DB::Execute('INSERT INTO recordbrowser_clipboard_pattern values (%s,%s,%d)', [$tab, $pattern, $enabled]);
+		}
+
+		return $ret? true: false;
 	}
 		
 	public function getRecords($crits = [], $order = [], $limit = [], $admin = false) {
@@ -427,6 +516,8 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	
 	public function createRecord($idOrValuesOrObject) {
 		if (is_object($idOrValuesOrObject)) return $idOrValuesOrObject;
+		
+		if (is_numeric($idOrValuesOrObject)) return $this->getRecord([':id' => $idOrValuesOrObject]);
 		
 		return Utils_RecordBrowser_Recordset_Record::create($this, $idOrValuesOrObject);
 	}
@@ -518,12 +609,14 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		$crits = $crits? [Utils_RecordBrowser_Crits::create($crits)]: [];
 			
-		$accessCrits = ($admin || in_array($this->getTab(), $stack))?: $this->getAccessCrits('browse');
-		if ($accessCrits == false) return [];
-		elseif ($accessCrits !== true) {
+		if (! $accessCrits = ($admin || in_array($this->getTab(), $stack))?: $this->getAccessCrits('browse')) {
+			return Utils_RecordBrowser_Recordset_Query::create($this, 'false');
+		}
+		
+		if ($accessCrits !== true) {
 			$crits[] = $accessCrits;
 		}
-// 		var_dump($accessCrits->toWords($this));
+
 		if ($admin) {
 			$adminCrits = str_replace('<tab>', $this->getDataTableAlias(), Utils_RecordBrowserCommon::$admin_filter);
 		} else {
@@ -577,9 +670,13 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 	
 	public function getTable($key) {
+		return $this->getTables()[$key]?? '';
+	}
+	
+	public function getTables() {
 		$tab = $this->getTab();
 		
-		$tables = [
+		return [
 				'callback' => $tab . '_callback',
 				'recent' => $tab . '_recent',
 				'favorite' => $tab . '_favorite',
@@ -588,8 +685,6 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 				'fields' => $tab . '_field',
 				'data' => $tab . '_data_1'
 		];
-		
-		return $tables[$key]?? '';
 	}
 
 	public function getId() {

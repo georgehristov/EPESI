@@ -47,6 +47,14 @@ class Utils_RecordBrowser_Recordset_Field_Integer extends Utils_RecordBrowser_Re
     	return __('Enter a numeric value in the text field');
     }
     
+    public function isDescriptive() {
+    	return $this->isVisible() && $this->isRequired();
+    }
+    
+    public static function defaultStyle() {
+    	return 'number';
+    }
+    
     public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
     	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
     		return;
@@ -55,5 +63,16 @@ class Utils_RecordBrowser_Recordset_Field_Integer extends Utils_RecordBrowser_Re
    		$form->addRule($field, __('Only integer numbers are allowed.'), 'regex', '/^\-?[0-9]*$/');
    		if ($mode !== 'add')
    			$form->setDefaults([$field => $default]);
-    }   
+    }
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'integer'
+    			]
+    	];
+    }
 }

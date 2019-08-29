@@ -90,7 +90,9 @@ class CRM_FiltersCommon extends ModuleCommon {
 			$perspective[$k] = 'contact/' . $value;
 		}
 
-		return Utils_RecordBrowser_Crits_Placeholder::create('__PERSPECTIVE__', __('Perspective'), $perspective)->setDeactivateCritOnNull();
+		return Utils_RecordBrowser_Crits_Placeholder::create('__PERSPECTIVE__', __('Perspective'), $perspective)->setDeactivateCritOnNull()->setAvailable(function($field) {
+			return (in_array($field->getType(), ['select', 'multiselect']) && in_array('contact', $field['param']['select_tabs'])) || ($field->getType() === 'id' && $field->getTab() == 'contact');
+		});
 	}
 }
 

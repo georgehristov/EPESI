@@ -118,6 +118,11 @@ class Utils_RecordBrowser_Recordset_Query implements ArrayAccess
 		return 'SELECT ' . $this->getDataTableAlias() . '.* FROM ' . $this->getDataTableWithAlias() . $this->getWhereSql() . $this->getOrderSql($order);
 	}
 	
+	public function getSelectIdSql($order = [])
+	{
+		return 'SELECT ' . $this->getDataTableAlias() . '.id FROM ' . $this->getDataTableWithAlias() . $this->getWhereSql() . $this->getOrderSql($order);
+	}
+	
 	protected function getWhereSql()
 	{
 		$sql = $this->getSql();

@@ -16,9 +16,11 @@ class Utils_RecordBrowser_Admin extends Module {
 	private $recordset;
 	private $current_field;
 	
-    public function body($tab) {
-    	$this->setTab($tab);
-    	
+	public function construct($tab) {
+		$this->setTab($tab);
+	}
+	
+    public function body() {    	
     	load_js($this->get_module_dir() . 'main.js');
     	
         $_SESSION['client']['recordbrowser']['admin_access'] = Base_AdminCommon::get_access('Utils_RecordBrowser', 'records')==2;
@@ -85,14 +87,14 @@ class Utils_RecordBrowser_Admin extends Module {
         $full_access = Base_AdminCommon::get_access('Utils_RecordBrowser', 'settings')==2;
         
         $form = $this->init_module(Libs_QuickForm::module_name());
-        $r = DB::GetRow('SELECT caption,description_fields,favorites,recent,full_history,jump_to_id,search_include,search_priority FROM recordbrowser_table_properties WHERE tab=%s',array($this->getTab()));
+        $r = DB::GetRow('SELECT caption,description_pattern,favorites,recent,full_history,jump_to_id,search_include,search_priority FROM recordbrowser_table_properties WHERE tab=%s',array($this->getTab()));
         $form->addElement('text', 'caption', __('Caption'));
         $callback = Utils_RecordBrowserCommon::get_description_callback($this->getTab());
         if ($callback) {
             echo '<div style="color:red; padding: 1em;">' . __('Description Fields take precedence over callback. Leave them empty to use callback') . '</div>';
             $form->addElement('static', '', __('Description Callback'), implode('::', $callback))->freeze();
         }
-        $form->addElement('text', 'description_fields', __('Description Fields'), array('placeholder' => __('Comma separated list of field names')));
+        $form->addElement('text', 'description_pattern', __('Description Pattern'), array('placeholder' => __('Record description pattern e.g. %{{first_name}} %{{last_name}}')));
         $form->addElement('select', 'favorites', __('Favorites'), array(__('No'), __('Yes')));
         $recent_values = array(0 => __('No'));
         foreach (array(5, 10, 15, 20, 25) as $rv) { $recent_values[$rv] = "$rv " . __('Records') ; }
@@ -113,8 +115,8 @@ class Utils_RecordBrowser_Admin extends Module {
             $clear_index_href = $this->create_confirm_callback_href(__('Are you sure?'), array($this, 'clear_search_index'), array($this->getTab()));
             echo "<a $clear_index_href>" . __('Clear search index') . "</a>";
             if ($form->validate()) {
-                DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,description_fields=%s,favorites=%b,recent=%d,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
-                            array($form->exportValue('caption'), $form->exportValue('description_fields'), $form->exportValue('favorites'), $form->exportValue('recent'), $form->exportValue('full_history'), $form->exportValue('jump_to_id'), $form->exportValue('search_include'), $form->exportValue('search_priority'), $this->getTab()));
+                DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,description_pattern=%s,favorites=%b,recent=%d,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
+                            array($form->exportValue('caption'), $form->exportValue('description_pattern'), $form->exportValue('favorites'), $form->exportValue('recent'), $form->exportValue('full_history'), $form->exportValue('jump_to_id'), $form->exportValue('search_include'), $form->exportValue('search_priority'), $this->getTab()));
             }
         }
     }
@@ -950,18 +952,21 @@ class Utils_RecordBrowser_Admin extends Module {
 				$gb_row = $gb->get_new_row();
 				$gb_row->add_data_array($vals);
 				if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')==2) {
-					$gb_row->add_action($this->create_callback_href(array($this, 'edit_permissions_rule'), array($id)), 'edit', 'Edit');
-					$gb_row->add_action($this->create_callback_href(array($this, 'edit_permissions_rule'), array($id, true)), 'copy', __('Clone rule'), Base_ThemeCommon::get_template_file(Utils_Attachment::module_name(),'copy_small.png'));
-					$gb_row->add_action($this->create_confirm_callback_href(__('Are you sure you want to delete this rule?'), array($this, 'delete_permissions_rule'), array($id)), 'delete', 'Delete');
+					$gb_row->add_action($this->create_callback_href(['Base_BoxCommon', 'push_module'], ['Utils_RecordBrowser#Admin', 'edit_permissions_rule', $id, $this->getTab()]), 'edit', __('Edit'));
+					$gb_row->add_action($this->create_callback_href(['Base_BoxCommon', 'push_module'], ['Utils_RecordBrowser#Admin', 'edit_permissions_rule', [$id, true], $this->getTab()]), 'copy', __('Clone rule'), Base_ThemeCommon::get_template_file(Utils_Attachment::module_name(),'copy_small.png'));
+					$gb_row->add_action($this->create_confirm_callback_href(__('Are you sure you want to delete this rule?'), [$this, 'delete_permissions_rule'], [$id]), 'delete', 'Delete');
 				}
 			}
 		}
-		if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')==2) 
-			Base_ActionBarCommon::add('add',__('Add new rule'), $this->create_callback_href(array($this, 'edit_permissions_rule'), array(null)));
+		if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')==2) {
+			Base_ActionBarCommon::add('add',__('Add new rule'), $this->create_callback_href(['Base_BoxCommon', 'push_module'], ['Utils_RecordBrowser#Admin', 'edit_permissions_rule', [], $this->getTab()]));
+		}
+			
 		Base_ThemeCommon::load_css('Utils_RecordBrowser', 'edit_permissions');
 		$this->display_access_callback_descriptions();
 		$this->display_module($gb);
-		eval_js('utils_recordbrowser__crits_initialized = false;');
+		eval_js('Utils_RecordBrowser.permissions.crits_initialized = false;');
+// 		eval_js('utils_recordbrowser__crits_initialized = false;');
 	}
 	public function display_access_callback_descriptions() {
 		$callbacks = Utils_RecordBrowserCommon::get_custom_access_callbacks($this->getTab());
@@ -997,27 +1002,32 @@ class Utils_RecordBrowser_Admin extends Module {
 	}
 	
 	public function edit_permissions_rule($id = null, $clone = false) {
-		if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')!=2) return false;
-        if ($this->is_back()) {
-            return false;
+		if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')!=2) {
+			print(__('You are not authorized to view for this page!'));
+			
+			return;
 		}
-		load_js('modules/Utils/RecordBrowser/edit_permissions.js');
-		$all_clearances = array(''=>'---')+array_flip(Base_AclCommon::get_clearance(true));
+		
+        if ($this->is_back()) {
+            return Base_BoxCommon::pop_main();
+		}
+// 		load_js($this->get_module_dir() . 'edit_permissions.js');
+		$all_clearances = [''=>'---'] + array_flip(Acl::get_clearance(true));
 
 		$form = $this->init_module(Libs_QuickForm::module_name());
 		$theme = $this->init_module(Base_Theme::module_name());
 		
-		$counts = array(
+		$counts = [
 			'clearance'=>5,
-		);
+		];
 		
 		$actions = $this->get_permission_actions();
 		$form->addElement('select', 'action', __('Action'), $actions);
 
-		for ($i=0; $i<$counts['clearance']; $i++)
+		for ($i=0; $i < $counts['clearance']; $i++)
 			$form->addElement('select', 'clearance_'.$i, __('Clearance'), $all_clearances);
 
-		$defaults = array();
+		
 		$form->addElement('multiselect', 'blocked_fields', null, $this->getRecordset()->getHash());
 
 		$theme->assign('labels', array(
@@ -1032,16 +1042,15 @@ class Utils_RecordBrowser_Admin extends Module {
 			'add_and' => __('Add criteria (and)')
  		));
 		$current_clearance = 0;
-        $crits = array();
-		if ($id!==null && $this->tab!='__RECORDSETS__' && !preg_match('/,/',$this->tab)) {
+        $crits = [];
+        $defaults = [];
+        if ($id!==null && $this->getTab()!='__RECORDSETS__' && !preg_match('/,/',$this->getTab())) {
 			$row = DB::GetRow('SELECT * FROM '.$this->getTab().'_access AS acs WHERE id=%d', array($id));
 			
 			$defaults['action'] = $row['action'];
-			$crits = Utils_RecordBrowserCommon::unserialize_crits($row['crits']);
-            if (is_array($crits)) {
-                $crits = Utils_RecordBrowser_Crits::from_array($crits);
-            }
-			
+
+			$crits = Utils_RecordBrowser_Crits::create(Utils_RecordBrowserCommon::unserialize_crits($row['crits']));
+		
 			$i = 0;
 			$tmp = DB::GetAll('SELECT * FROM '.$this->getTab().'_access_clearance AS acs WHERE rule_id=%d', array($id));
 			foreach ($tmp as $t) {
@@ -1070,16 +1079,21 @@ class Utils_RecordBrowser_Admin extends Module {
 				Utils_RecordBrowserCommon::add_access($this->getTab(), $action, $clearance, $crits, $vals['blocked_fields']);
 			else
 				Utils_RecordBrowserCommon::update_access($this->getTab(), $id, $action, $clearance, $crits, $vals['blocked_fields']);
-			return false;
+		
+			return Base_BoxCommon::pop_main();
 		}
 		
 		$labels_map = array(
 			'blocked_fields__from' => __('GRANT'),
 			'blocked_fields__to' => __('DENY')
 		);
-		eval_js('utils_recordbrowser__set_field_access_titles ('.json_encode($labels_map).')');
-		eval_js('utils_recordbrowser__init_clearance('.$current_clearance.', '.$counts['clearance'].')');
-		eval_js('utils_recordbrowser__crits_initialized = true;');
+		eval_js('Utils_RecordBrowser.permissions.set_field_access_titles ('.json_encode($labels_map).')');
+		eval_js('Utils_RecordBrowser.permissions.init_clearance('.$current_clearance.', '.$counts['clearance'].')');
+		eval_js('Utils_RecordBrowser.permissions.crits_initialized = true;');
+		
+// 		eval_js('utils_recordbrowser__set_field_access_titles ('.json_encode($labels_map).')');
+// 		eval_js('utils_recordbrowser__init_clearance('.$current_clearance.', '.$counts['clearance'].')');
+// 		eval_js('utils_recordbrowser__crits_initialized = true;');
 		
 		$form->assign_theme('form', $theme);
 		$theme->assign('counts', $counts);
@@ -1088,7 +1102,6 @@ class Utils_RecordBrowser_Admin extends Module {
 		Utils_ShortcutCommon::add(array('Ctrl','S'), 'function(){'.$form->get_submit_form_js().'}');
 		Base_ActionBarCommon::add('save', __('Save'), $form->get_submit_form_href());
 		Base_ActionBarCommon::add('delete', __('Cancel'), $this->create_back_href());
-		return true;
 	}
 	
 	private function get_permission_actions() {

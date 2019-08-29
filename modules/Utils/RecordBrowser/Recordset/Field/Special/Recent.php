@@ -24,4 +24,17 @@ class Utils_RecordBrowser_Recordset_Field_Special_Recent extends Utils_RecordBro
 	public function processGet($values, $options = []) {
 		return [];
 	}
+	
+	public function queryBuilderFilters($opts = []) {
+		return [
+				[
+						'id' => ':Recent',
+						'field' => ':Recent',
+						'label' => __('Recent'),
+						'type' => 'boolean',
+						'input' => 'select',
+						'values' => ['1' => __('Yes'), '0' => __('No')]
+				]
+		];
+	}
 }

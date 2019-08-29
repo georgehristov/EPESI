@@ -4,7 +4,6 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Recordset_Field {
 	public static $options_limit = 50;
-	protected $multiselect = false;
 	protected $single_tab = false;
 	protected $record_count = 0;
 	
@@ -278,104 +277,82 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		$param = $this->getParam();
 		$value = $crit->getValue()->getValue();
 		$operator = $crit->getOperator()->getOperator();
-		
-		$sql = '';
-		$vals = [];
-		$sub_field = $crit->getKey()->getSubfield();
-		
+
 		$field = $this->getQueryId();
 		
+		$subfield = $crit->getKey()->getSubfield();
+
+		//if using LIKE operator and no subfield then look into the default subfields
+		if (!$subfield && $operator == DB::like() && $param['cols']) {
+			$subfield = implode('|', $param['cols']);
+		}
+
 		$tab2 = $param['single_tab'];
 		
-		if ($crit->getOperator()->getOperator() == DB::like() && isset($param['cols'])) {
-			$sub_field = implode('|', $param['cols']);
-		}
-		
-		$vv = explode('::', $value, 2);
-		$ids = null;
-		if(isset($vv[1]) && is_callable($vv)) {
-			$handled_with_php = $this->getRecordset()->createQuery('true');
+		$query = $this->getRecordset()->createQuery('false');
+		if ($this->decodePlaceholderCallback($value)) {
+			$handled_with_php = $this->getRecordset()->createQuery();//'true');
 			
 			if (!$tab2) return $handled_with_php;
-			$callbacks = array(
-					'view' => 'Utils_RecordBrowserCommon::get_recursive_view',
-					'edit' => 'Utils_RecordBrowserCommon::get_recursive_edit',
-					'print' => 'Utils_RecordBrowserCommon::get_recursive_print',
-					'delete' => 'Utils_RecordBrowserCommon::get_recursive_delete',
-			);
-			$action = null;
-			foreach ($callbacks as $act => $c) {
-				if (strpos($value, $c) !== false) {
-					$action = $act;
-					break;
-				}
-			}
-			if (!$action) return $handled_with_php;
 			
-			$access_crits = Utils_RecordBrowserCommon::get_access($tab2, $action, null, true);
-			$subquery = Utils_RecordBrowserCommon::build_query($tab2, $access_crits, $this->admin_mode);
-			if ($subquery) {
-				$ids = DB::GetCol("SELECT r.id FROM $subquery[sql]", $subquery['vals']);
-			} else {
-				$sql = 'false';
+			$access_crits = $this->validate($crit, null);
+			
+			if (!$access_crits instanceof Utils_RecordBrowser_Recordset_Query_Crits) {
+				return $handled_with_php;
 			}
-		} else if ($sub_field && $tab2 && $tab2 != $this->getTab()) {
-			$col2 = explode('|', $sub_field);
-			$crits = new Utils_RecordBrowser_Crits();
-			foreach ($col2 as $col) {
-				$col = $col[0] == ':' ? $col : self::getFieldId(trim($col));
-				if ($col) {
-					Utils_RecordBrowser_Crits::or($crits, Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($col, $value, $operator));
-				}
+			
+			$query = $this->getSubQuery($tab2, $access_crits);
+		} else if ($subfield && $tab2 && $tab2 != $this->getTab()) {
+			$crits = [];
+			foreach (explode('|', $subfield) as $col) {
+				if (! $col = $col[0] == ':' ? $col : self::getFieldId(trim($col))) continue;
+				
+				$crits[] = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($col, clone $crit->getValue(), clone $crit->getOperator());
 			}
-			if (!$crits->isEmpty()) {
-				$subquery = Utils_RecordBrowserCommon::build_query($tab2, $crits, $this->admin_mode);
-				if ($subquery) {
-					$ids = DB::GetCol("SELECT r.id FROM $subquery[sql]", $subquery['vals']);
-				} else {
-					$sql = 'false';
-				}
-			}
+
+			$query = $this->getSubQuery($tab2, Utils_RecordBrowser_Crits::create($crits, true));
 		} else {
-			if ($rawSql) {
+			if ($crit->getValue()->isRawSql()) {
 				$sql = "$field $operator $value";
-			} elseif (!$value) {
-				$sql = "$field IS NULL";
-				if (!$tab2 || $this->multiselect) {
-					$sql .= " OR $field=''";
+			} elseif (! $value) {
+				$sql_null = stripos($operator, '!') !== false? 'NOT': '';
+				
+				$sql = "$field IS $sql_null NULL";
+				if (!$tab2) {
+					$sql .= " OR $field $operator ''";
 				}
+				
+				return $this->getRecordset()->createQuery($sql);				
 			} else {
-				if ($tab2 && !$this->multiselect && $operator != DB::like()) {
+				if ($tab2 && $operator != DB::like()) {
 					$operand = '%d';
+					$value = $this->stripToken($value);
 				} else {
 					if (DB::is_postgresql()) {
 						$field .= '::varchar';
 					}
 					$operand = '%s';
 				}
-				if ($this->multiselect) {
-					$value = "%\\_\\_{$value}\\_\\_%";
-					$operator = DB::like();
-				}
-				$sql = "($field $operator $operand AND $field IS NOT NULL)";
-				$vals[] = $value;
+				
+				$query = $this->getDefaultQuery($operator, $operand, $value);
 			}
 		}
-		if ($ids) {
-			if ($this->multiselect) {
-				$q = [];
-				foreach ($ids as $id) {
-					$q[] = "$field LIKE '%\\_\\_$id\\_\\_%'";
-				}
-				$q = implode(' OR ', $q);
-			} else {
-				$q = implode(',', $ids);
-				$q = "$field IN ($q)";
-			}
-			$sql = "($field IS NOT NULL AND ($q))";
-		}
-		
-		return $this->getRecordset()->createQuery($sql, $vals);
+
+		$sql = $query->getSql();
+
+		return $this->getRecordset()->createQuery($sql? "$field IS NOT NULL AND $sql": '', $query->getValues());
+	}
+	
+	public function getDefaultQuery($operator, $operand, $value) {
+		return $this->getRecordset()->createQuery("{$this->getSqlId()} $operator $operand", [$value]);
+	}
+	
+	public function getSubQuery($recordset, $crits) {
+		if ($crits->isEmpty()) return $this->getRecordset()->createQuery();
+
+		$query = Utils_RecordBrowser_Recordset::create($recordset)->setDataTableAlias('sub')->getQuery($crits);
+
+		return $this->getRecordset()->createQuery("{$this->getQueryId()} IN ({$query->getSelectIdSql()})", $query->getValues());
 	}
 	
 	public function getSearchCrits($word) {
@@ -409,7 +386,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 
 		return __('Select one') . ($ret? ' ' . __('of') . ' ' . $ret: '');
 	}
-	
+
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
 		$ret = '---';
 
@@ -499,8 +476,12 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		));
 	} 
 	
-	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
-		$values = $this->decodeValue($values[$this->getArrayId()] ?? '', false);
+	public function validate(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $values) {
+		if ($callback = $this->decodePlaceholderCallback($crits->getValue()->getValue())) {
+			return is_callable($callback['func'])? call_user_func_array($callback['func'], array_merge([$this, $values], $callback['args'])): true;
+		}
+		
+		$values = $this->decodeValue($values, false);
 
 		if ($subfield = $crits->getKey()->getSubfield()) {
 			if ($tab2 = $this->getParam('single_tab')) {
@@ -520,11 +501,119 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 		
 		// remove prefix for select from single tab: contact/1 => 1
 		if (preg_match('/^[0-9-]+$/', is_array($values)? reset($values): $values)) {
-			$crit_value = preg_replace('#.*/#', '', $critsCheck->getValue()->getValue());
+			$crit_value = $this->stripToken($critsCheck->getValue()->getValue());
 			
 			$critsCheck->getValue()->setValue($crit_value);
 		}
 		
-		return parent::validate($record, $critsCheck);
+		return parent::validate($critsCheck, $values);
+	}
+	
+	public static function encodePlaceholderCallback($callback, $args = []) {
+		$callback = is_array($callback)? implode('::', $callback): $callback;
+		
+		return implode('|', array_merge(['__CALLBACK__', $callback], $args));
+	}
+	
+	public static function decodePlaceholderCallback($value) {
+		$value = explode('|', $value);
+			
+		if ($value[0] != '__CALLBACK__') return;
+			
+		array_shift($value);
+		
+		$func = array_shift($value);
+		$args = $value;
+			
+		return compact('func', 'args');
+	}
+	
+	public function toWords(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $asHtml = true) {
+		$subquery = false;
+		
+		$tab2 = $this->getParam('single_tab');
+		
+		$subfield = $crits->getKey()->getSubfield();
+		
+		//if using LIKE operator and no subfield then look into the default subfields
+		if (!$subfield && $crits->getOperator()->getOperator() == DB::like() && $this['param']['cols']) {
+			$subfield = implode('|', $this['param']['cols']);
+		}
+		
+		if ($subfield && $tab2) {
+			$crits2 = [];
+			foreach ( explode('|', $subfield) as $col ) {
+				if (! $col = $col[0] == ':' ? $col: self::getFieldId(trim($col))) continue;
+
+				$crits2[] = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($col, clone $crits->getValue(), clone $crits->getOperator());
+			}
+
+			$value = Utils_RecordBrowser_Crits::create($crits2, true)->toWords($tab2, $asHtml);
+
+			$subquery = true;
+		}
+
+		$key = $this->getLabel();
+		$value = $subquery? $value: $this->getValueToWords($crits->getValue()->getValue());;
+		$operand = $subquery? __('is set to record where'): $crits->getOperator()->toWords();
+
+		if ($asHtml) {
+			$key = "<strong>$key</strong>";
+			
+			$value = $subquery? $value: '<strong>' . $value . '</strong>';
+		}
+		$ret = "{$key} {$operand} {$value}";
+		
+		return $asHtml? $ret: html_entity_decode($ret);
+	}
+	
+	private function stripToken($token) {
+		$id = preg_replace('#.*/#', '', $token);
+		
+		return is_numeric($id)? $id: 0;
+	}
+	
+	public function queryBuilderFilters($opts = []) {
+		if (! $tab = $this['param']['single_tab']) return;
+		
+		//TODO: Georgi hristov introduce select2 as plugin and select options
+		$filters = [
+				[
+						'id' => $this->getId(),
+						'field' => $this->getId(),
+						'label' => $this->getLabel() . ' (' . __('selection') . ')',
+						'type' => 'boolean',
+						'input' => 'select',
+						'values' => [
+								'' => '[' . __('Empty') . ']'
+						],
+// 						'plugin' => 'select2',
+// 						'plugin_config' => [
+// 							'data' => ["abc", "xyz"]
+// 						],
+				]
+		];
+
+		if ($opts['godeep']?? true) {
+			$prefix =  __('%s is set to record where', [$this->getLabel()]) . ' ';
+			
+			foreach (Utils_RecordBrowser_Recordset::create($tab)->getFields() as $field) {
+				if (! $field->isStored()) continue;
+
+				if (!$subfilter = $field->queryBuilderFilters(['godeep' => false])) continue;
+				
+				$subfilter = reset($subfilter);
+
+				$filters[] = array_merge($subfilter, [
+						'id' => $this->getId() . '[' . $subfilter['id'] . ']',
+						'field' => $this->getId() . '[' . $subfilter['field'] . ']',
+						'label' => $prefix . $subfilter['label'],
+						'optgroup' => $prefix
+				]);
+			}
+		}
+		
+		return $filters;
+		
 	}
 }

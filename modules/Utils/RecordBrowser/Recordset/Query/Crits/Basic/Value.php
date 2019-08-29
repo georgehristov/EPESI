@@ -34,6 +34,12 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value
 		
 		return $this;
 	}
+	
+	protected  function setPrefix($prefix) {
+		$this->value = $prefix . $this->value;
+		
+		return $this;
+	}
 
 	public function setRawSql($isRawSql) {
 		$this->isRawSql = $isRawSql;
@@ -55,38 +61,25 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value
 	
 	public function replace(Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder, $humanReadable = false) {
 		if ($this->isRawSql()) return false;
-		
+
 		if ($match = $this->getValue() === $placeholder->getKey()) {
 			$this->setValue($placeholder->getValue($humanReadable));
+			
+// 			if ($humanReadable) {
+// 				$this->setPrefix('__PLACEHOLDER__::');
+// 			}
 		}
 		
 		return $match;
 	}
 
-	public function toWords(Utils_RecordBrowser_Recordset_Field $field, $asHtml = true) {
-		if ($this->getCallback()) return '';
-		
-		$value = $this->getValue();
-
-		$ret = '';
-		if (is_bool($value)) {
-			$ret = $value ? __('true') : __('false');
-		} elseif ($value === '' || $value === null) {
-			$ret = __('empty');
-		} else {
-			$ret = Utils_RecordBrowserCommon::get_val($field->getTab(), $field->getId(), [$field->getId() => $value], true)?: $value;
-		}
-		
-		return $ret;
-	}
-	
-	public function getCallback() {
+	public function getPlaceholder() {
 		$value = explode('::', $this->getValue(), 3);
 		
-		if ($value[0] != '__CALLBACK__') return;
+		if ($value[0] != '__PLACEHOLDER__') return false;
 		
 		array_shift($value);
-		
-		return $value;
+
+		return implode('::', $value);
 	}
 }

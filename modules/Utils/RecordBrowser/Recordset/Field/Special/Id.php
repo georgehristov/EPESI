@@ -28,7 +28,11 @@ class Utils_RecordBrowser_Recordset_Field_Special_Id extends Utils_RecordBrowser
 	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
-		return Utils_RecordBrowserCommon::create_default_linked_label($tab, $record['id'], $nolink, false);
+		if (!$id = $record[':id']?? null) return '';
+		
+		if (!is_numeric($id)) return $id;
+		
+		return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->createDefaultLinkedLabel($nolink, false);
 	}
 	
 	public function getSqlId() {

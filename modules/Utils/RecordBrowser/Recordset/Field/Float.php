@@ -39,6 +39,10 @@ class Utils_RecordBrowser_Recordset_Field_Float extends Utils_RecordBrowser_Reco
     	return __('Enter a numeric value in the text field');
     }
     
+    public static function defaultStyle() {
+    	return 'number';
+    }
+    
     public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
     	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
     		return;
@@ -48,4 +52,15 @@ class Utils_RecordBrowser_Recordset_Field_Float extends Utils_RecordBrowser_Reco
     	if ($mode !== 'add')
     		$form->setDefaults([$field => $default]);
     }   
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'double'
+    			]
+    	];
+    }
 }

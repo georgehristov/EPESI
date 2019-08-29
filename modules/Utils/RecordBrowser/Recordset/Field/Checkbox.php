@@ -81,4 +81,17 @@ class Utils_RecordBrowser_Recordset_Field_Checkbox extends Utils_RecordBrowser_R
     	if ($mode !== 'add')
     		$form->setDefaults([$field => $default]);
     }
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'boolean',
+    					'input' => 'select',
+    					'values' => ['1' => __('Yes'), '0' => __('No')]
+    			]
+    	];
+    }
 }

@@ -39,6 +39,10 @@ class Utils_RecordBrowser_Recordset_Field_Time extends Utils_RecordBrowser_Recor
     		__('You can change 12/24-hour format in Control Panel, Regional Settings');
     } 
     
+    public static function defaultStyle() {
+    	return 'time';
+    }
+    
     public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
     	$ret = '';
     	if (isset($desc['id']) && isset($record[$desc['id']])) {
@@ -64,4 +68,15 @@ class Utils_RecordBrowser_Recordset_Field_Time extends Utils_RecordBrowser_Recor
     	if ($mode !== 'add' && $default)
     		$form->setDefaults(array($field => $default));
     }   
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'time'
+    			]
+    	];
+    }
 }

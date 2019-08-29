@@ -138,7 +138,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     }
     
     public function validate($crits) {
-    	return Utils_RecordBrowser_Crits::create($crits)->validate($this);
+    	return Utils_RecordBrowser_Crits::create($crits)->validate($this->getRecordset(), $this->toArray())? false: true;
     }
 
     /**
@@ -161,10 +161,19 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
      * Get only values of record - exclude internal and special properties
      * @return array
      */
-    private function getValues() {
-        return array_filter($this->toArray(), function ($value, $key) {
-        	return !self::isSpecialProperty($key);
-        });
+    private function getValues($nolink = false, $checkAccess = false) {
+    	$access = $checkAccess? $this->getUserAccess(): true;
+    	
+    	if (!$access) return [];
+    	
+    	$ret = [];    	
+    	foreach ($this->getFields() as $field) {
+    		if (isset($access[$field->getId()]) && !$access[$field->getId()]) continue;
+    		
+    		$ret[$field->getId()] = $this->getValue($field, $nolink);
+    	}
+        
+        return $ret;
     }
 
     private static function isSpecialProperty($property) {
@@ -181,6 +190,14 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $this->load($row, $htmlspecialchars, false);
     }
     
+    /**
+     * Loads raw DB values array to the record fields
+     * 
+     * @param array 	$row - values from the DB
+     * @param boolean 	$htmlspecialchars
+     * @param boolean 	$dirty - use only provided values or fill all record fields with default values if not provided
+     * @return Utils_RecordBrowser_Recordset_Record
+     */
     public function load($row, $htmlspecialchars = true, $dirty = true) {
     	foreach ($this->getFields() as $field) {
     		$row[$field->getSqlId()] = $row[$field->getSqlId()]?? ($row[$field->getArrayId()]?? ($row[$field->getId()]?? null));
@@ -195,6 +212,9 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $this;
     }
     
+    /**
+     * Load all record fields with default values
+     */
     public function loadDefaults() {
     	$values = $this->getRecordset()->getDefaultValues('add', $this);
     	
@@ -239,7 +259,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	$id = DB::Insert_ID($this->getTab() . '_data_1', 'id');
     	
     	$this[':id'] = $values['id'] = $id;
-    	foreach($fields as $field) {
+    	foreach ($fields as $field) {
     		$values = $field->process($values, 'added');
     	}
     	
@@ -286,6 +306,8 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     		}
     		
     		if (!$result = $field->process($values, 'edit', $existing)) continue;
+    		
+//     		if (! $field->isStored()) continue;
     		
     		if (!$sqlId = $field->getSqlId()) continue;
     		
@@ -486,7 +508,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	foreach ($this->getFields() as $field) {
     		if (!$field['tooltip'] || !$access[$field['id']]) continue;
     			
-    		$data[$field->getLabel()] = $field->getDisplayValue($this, true);
+    		$data[$field->getLabel()] = $this->getValue($field, true);
     	}
     	
     	return $data;
@@ -529,20 +551,83 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 	    return true;
     }
     
+    public function createDefaultLinkedLabel($nolink=false, $includeTabCaption=true, $tooltip = true, $more = []){
+    	$label = '';
+    	if ($this->getUserAccess()) {
+    		if ($description_pattern = $this->getRecordset()->getProperty('description_pattern')) {
+    			$label = trim(Utils_RecordBrowserCommon::replace_clipboard_pattern($description_pattern, $this->getValues(true, true)));
+    		} elseif ($description_callback = $this->getRecordset()->getProperty('description_callback')) {
+    			$label = call_user_func($description_callback, $this->toArray(), $nolink);
+    		} else {
+    			foreach ($this->getFields() as $field) {
+    				if (! $field->isDescriptive()) continue;
+    				
+    				$label = $this->getValue($field, false);
+    				break;
+    			}
+    		}
+    	}
+    	
+    	$tabCaption = $this->getRecordset()->getCaption();
+    	if (!$tabCaption || $tabCaption == '---') $tabCaption = $this->getTab();
+
+   		$label = $label? ($includeTabCaption? $tabCaption . ': ': '') . $label: sprintf("%s: #%06d", $tabCaption, $this->getId());
+
+    	return $this->createLinkedText($label, $nolink, $tooltip, $more);
+    }
+        
     public function createLinkedLabel($cols, $nolink = false, $tooltip = false, $more = []) { 
     	$cols = is_array($cols)? $cols: explode('|', $cols);
     	
-    	$vals = array_filter($this->getDisplayValues($nolink, $cols, false));
+    	$pattern = [];
+    	foreach ($cols as $col) {
+    		$col = Utils_RecordBrowserCommon::get_field_id($col);
+    		
+    		$pattern[] = "%{{{$col}}}";
+    	}  
     	
-    	$label = implode(' ', $vals)?: $this->getRecordset()->getCaption() . ": " . sprintf("#%06d", $this->getId());
-    	
-    	$label = $this->createTooltip($label, $nolink, $tooltip);
-    	
-    	return Utils_RecordBrowserCommon::record_link_open_tag_r($this->getRecordset()->getTab(), $this->toArray(), $nolink, 'view', $more) .
-    			$label . Utils_RecordBrowserCommon::record_link_close_tag();
+    	return $this->createLinkedPattern(implode(' ', $pattern), $nolink, $tooltip, $more);
     }
     
-    public function createTooltip($label, $nolink = false, $tooltip = false){
+    public function createLinkedPattern($pattern, $nolink = false, $tooltip = false, $more = []) {
+    	$label = trim(Utils_RecordBrowserCommon::replace_clipboard_pattern($pattern, $this->toArray()))?: $this->getRecordset()->getCaption() . ": " . sprintf("#%06d", $this->getId());
+    	
+    	return $this->createLinkedText($label, $nolink, $tooltip, $more);
+    }
+
+    public function createLinkedText($text, $nolink = false, $tooltip = true, $more = []) {
+    	$tip = $openTag = $closeTag = '';
+
+    	if (! $this->isActive()) {
+    		$tip = __('This record was deleted from the system, please edit current record or contact system administrator');
+    		$openTag = '<del>';
+    		$closeTag = '</del>';
+    	}
+    	
+    	if (!$nolink) {
+    		if ($this->getUserAccess()) {
+    			$href = $this->createHref('view', $more);
+    			
+    			$tipAttrs = $tooltip? $this->getDefaultTooltipAttrs($tip? $tip . '<hr>': ''): Utils_TooltipCommon::open_tag_attrs($tip);
+    			
+    			$openTag = "<a $tipAttrs $href>$openTag";
+    			$closeTag .= '</a>';
+    		}
+    		else {
+    			$tip = implode('<br />', [$tip, __('You don\'t have permission to view this record.')]);
+    			
+    			$tipAttrs = Utils_TooltipCommon::open_tag_attrs($tip);
+    			
+    			$openTag = "<span $tipAttrs>$openTag";
+    			$closeTag .= '</span>';
+    		}
+    	}    	
+
+    	return $openTag . $text . $closeTag;    	
+    }
+    
+    public function createTooltip($label, $nolink = false, $tooltip = false) {
+    	
     	if (!$tooltip || $nolink || Utils_TooltipCommon::is_tooltip_code_in_str($label))
     		return $label;
     		
@@ -587,17 +672,21 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return call_user_func_array($tooltip_create_callback, $tooltip_create_args);
     }
     
-    public function createDefaultTooltip($label, $force = false){
+    final public function getDefaultTooltipAttrs($header = ''){
+    	return Utils_TooltipCommon::ajax_open_tag_attrs([__CLASS__, 'getDefaultTooltipContents'], [$this->getTab(), $this->getId(), $header]);
+    }
+    
+    final public function createDefaultTooltip($label, $force = false, $header = ''){
     	if (!$force && Utils_TooltipCommon::is_tooltip_code_in_str($label)) {
     		return $label;
     	}
     	
-    	return Utils_TooltipCommon::ajax_create($label, [$this, 'getDefaultTooltipContents'], [$this->getRecordset()->getTab(), $this->getId()]);
+    	return Utils_TooltipCommon::ajax_create($label, [__CLASS__, 'getDefaultTooltipContents'], [$this->getTab(), $this->getId(), $header]);
     }
     
-    public function getDefaultTooltipContents($tab, $id)
+    final public static function getDefaultTooltipContents($tab, $id, $header = '')
     {
-    	return Utils_TooltipCommon::format_info_tooltip($this->getTooltipData());
+    	return $header . Utils_TooltipCommon::format_info_tooltip(self::create($tab, $id)->read()->getTooltipData());
     }
     
     public function getInfo() {
@@ -619,49 +708,12 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 		];
 	}
     
-    public function clone_data() {
+    public function cloneData() {
         $c = clone $this;
         
         $c[':id'] = $c[':created_by'] = $c[':created_on'] = null;
         
         return $c;
-    }
-
-    public function create_default_linked_label($nolink = false, $table_name = true) {
-        return $this->getRecordset()->create_default_linked_label($this->__records_id, $nolink, $table_name);
-    }
-
-    /**
-     * Create link to record with specific text.
-     * @param string $text Html to display as link
-     * @param bool $nolink Do not create link
-     * @param string $action Link to specific action. 'view' or 'edit'.
-     * @return string html string with link
-     */
-    public function record_link($text, $nolink = false, $action = 'view') {
-    	return $this->getRecordset()->record_link($this->__records_id, $text, $nolink, $action);
-    }
-
-    /**
-     * Get field string representation - display callback gets called.
-     * @param string $field Field id, e.g. 'first_name'
-     * @param bool $nolink Do not create link
-     * @return string String representation of field value
-     */
-    public function get_val($field, $nolink = false) {
-    	return $this->getRecordset()->get_val($field, $this, $nolink);
-    }
-
-    /**
-     * Get HTML formatted record's info. Record has to exist in DB.
-     * It has to be saved first, when you're creating new record.
-     * @return string Html with record info
-     */
-    public function get_html_record_info() {
-        if (!$this->__records_id)
-            trigger_error("get_html_record_info may be called only for saved records", E_USER_ERROR);
-        
-        return $this->getRecordset()->get_html_record_info($this->__records_id);
     }
 
     // ArrayAccess interface members

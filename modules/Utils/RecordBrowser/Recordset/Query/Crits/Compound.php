@@ -11,6 +11,11 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Compound extends Utils_RecordBro
     	return self::create(Utils_RecordBrowser_Recordset_Query_Crits_Single::create($key, $value, $operator));
     }
 
+    /**
+     * @param mixed $crits
+     * @param boolean $or
+     * @return Utils_RecordBrowser_Recordset_Query_Crits_Compound
+     */
     public static function create($crits = null, $or = false)
     {
     	if ($crits instanceof Utils_RecordBrowser_Recordset_Query_Crits) return $crits;

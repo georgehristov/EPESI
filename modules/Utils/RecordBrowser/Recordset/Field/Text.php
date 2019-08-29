@@ -41,6 +41,10 @@ class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recor
     	return $ret;
     }
     
+    public function isDescriptive() {
+    	return $this->isVisible() && $this->isRequired();
+    }
+    
     public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
     	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
     		return;
@@ -54,8 +58,8 @@ class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recor
     		$form->setDefaults([$field => $default]);
     } 
     
-    public function validate(Utils_RecordBrowser_Recordset_Record $record, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
-    	$value = $this->decodeValue($record[$this->getId()] ?? '', false);
+    public function validate(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $value) {
+    	$value = $this->decodeValue($value, false);
     	$crit_value = $crits->getValue()->getValue();
     	
     	$result = false;
@@ -72,5 +76,16 @@ class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recor
     	}
     	
     	return $result;
+    }
+
+    public function queryBuilderFilters($opts = []) {
+		return [
+				[
+						'id' => $this->getId(),
+						'field' => $this->getId(),
+						'label' => $this->getLabel(),
+						'type' => 'string'
+				]
+		];
     }
 }

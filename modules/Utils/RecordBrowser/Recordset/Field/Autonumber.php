@@ -51,6 +51,14 @@ class Utils_RecordBrowser_Recordset_Field_Autonumber extends Utils_RecordBrowser
     	return __('This field is not editable');
     }
     
+    public function isDescriptive() {
+    	return $this->isVisible();
+    }
+    
+    public static function defaultStyle() {
+    	return 'number';
+    }
+    
     public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {
     	if (self::createQFfieldStatic($form, $field, $label, $mode, $default, $desc, $rb_obj))
     		return;

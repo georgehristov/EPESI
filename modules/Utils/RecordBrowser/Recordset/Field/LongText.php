@@ -64,4 +64,16 @@ class Utils_RecordBrowser_Recordset_Field_LongText extends Utils_RecordBrowser_R
     	
     	return parent::processEdit($values, $existing);
     }
+    
+    public function queryBuilderFilters($opts = []) {
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'string',
+    					'input' => 'textarea',
+    			]
+    	];
+    }
 }

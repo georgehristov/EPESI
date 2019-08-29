@@ -90,10 +90,8 @@ class Libs_QuickForm extends Module {
 				// 0=type, 1=name, 2=label, 3=tab, 4=crits
 				if (isset ($args[3]) && Utils_RecordBrowserCommon::check_table_name($args[3], false, false)) {
 					$tab = $args[3];
-					$qbi = new Utils_RecordBrowser_QueryBuilderIntegration($tab);
-					$default_crits = isset($args[4]) ? $args[4] : array();
-					$qb = $qbi->get_builder_module($this, $default_crits);
-					$qb->add_to_form($this, $args[1], $args[2]);
+					$default_crits = $args[4]?? [];
+					Utils_RecordBrowser_QueryBuilderIntegration::create($tab)->getBuilderModule($this, $default_crits)->add_to_form($this, $args[1], $args[2]);
 				}
 			}
 		}

@@ -27,19 +27,26 @@ class Utils_RecordBrowser extends Module {
 	private $browseMode;
 	private $recordsCount = 0;
 	private $additionalCaption = '';
+	private $customDefaults = [];
+	private $multipleDefaults = []; 
+	private $crits = [];
+	private $navigationExecuted = false;
+	private $searchCritsCallback;
+	
+	
+	
 	
     private $browse_mode;
     private $recent = 0;
     private $caption = '';
     private $icon = '';
     private $full_history = true;
-    private $crits = array();
-    private $noneditable_fields = array();
+
     private $add_button = null;
     private $more_add_button_stuff = '';
     private $changed_view = false;
     private $is_on_main_page = false;
-    private $multiple_defaults = false;    
+ 
     private $custom_filters = array();
     private $default_order = array();
     private $fullscreen_table = false;
@@ -47,13 +54,13 @@ class Utils_RecordBrowser extends Module {
     private $switch_to_addon = null;
     
     private $enable_export = false;
-	private $search_calculated_callback = false;
+	
 	private $fields_in_tabs = array();
 	private $hide_tab = array();
     private $jump_to_new_record = false;
     
     public $action = 'Browsing'; // _M('Browsing');
-    public $custom_defaults = array();
+    
     public static $tab_param = '';
     public static $clone_result = null;
     public static $clone_tab = null;
@@ -66,7 +73,7 @@ class Utils_RecordBrowser extends Module {
     public static $browsed_records = null;
     public static $access_override = array('tab'=>'', 'id'=>'');
     public static $mode = 'view';
-    private $navigation_executed = false;
+    
     private $current_field = null;
     private $additional_actions_methods = array();
     private $filter_crits = array();
@@ -121,8 +128,16 @@ class Utils_RecordBrowser extends Module {
         $this->hide_tab[$tab] = true;
     }
 
+    /**
+     * @return array
+     * @deprecated use getCustomDefaults
+     */
     public function get_custom_defaults(){
-        return $this->custom_defaults;
+        return $this->customDefaults;
+    }
+    
+    public function getCustomDefaults(){
+        return $this->customDefaults;
     }
     
     public function get_crits() {
@@ -148,6 +163,8 @@ class Utils_RecordBrowser extends Module {
     
     public function setCaption($caption) {
     	$this->caption = _M($caption);
+    	
+    	return $this;
     }
     
     public function getCaption() {
@@ -160,7 +177,15 @@ class Utils_RecordBrowser extends Module {
     	return implode(' - ', array_filter([$this->getCaption(), $this->getAdditionalCaption()])) . $this->get_jump_to_id_button();
     }
     
+    /**
+     * @param string $icon
+     * @deprecated use setIcon
+     */
     public function set_icon($icon) {
+    	return $this->setIcon($icon);
+    }
+    
+    public function setIcon($icon) {
     	if (!$icon) return;
     	
     	if (is_array($icon)) {
@@ -169,6 +194,12 @@ class Utils_RecordBrowser extends Module {
     	}
     	
     	$this->icon = $icon;
+    	
+    	return $this;
+    }
+    
+    public function getIcon() {
+    	return $this->icon;
     }
 
     /**
@@ -181,6 +212,8 @@ class Utils_RecordBrowser extends Module {
     
     public function setAdditionalCaption($additionalCaption) {
     	$this->additionalCaption = $additionalCaption;
+    	
+    	return $this;
     }
     public function getAdditionalCaption() {
     	return $this->additionalCaption;
@@ -213,6 +246,8 @@ class Utils_RecordBrowser extends Module {
 	
     public function setColumnOrder($columnOrder) {
     	$this->columnOrder = array_flip(array_values($columnOrder));
+    	
+    	return $this;
     }
 	
     public function getColumnOrder() {
@@ -259,8 +294,19 @@ class Utils_RecordBrowser extends Module {
 		return $this;
 	}
 
+	/**
+	 * @param array|string $callback
+	 * @deprecated use setSearchCritsCallback
+	 * 
+	 */
 	public function set_search_calculated_callback($callback) {
-		$this->search_calculated_callback = $callback;
+		$this->searchCritsCallback = $callback;
+	}
+	
+	public function setSearchCritsCallback($callback) {
+		$this->searchCritsCallback = $callback;
+		
+		return $this;
 	}
 
     public function get_val($field, $record, $links_not_recommended = false) {
@@ -434,7 +480,7 @@ class Utils_RecordBrowser extends Module {
         
         $theme->assign('caption', $this->getHeadline());
         
-        $theme->assign('icon', $this->icon);
+        $theme->assign('icon', $this->getIcon());
         $theme->display('Browsing_records');
     }
     
@@ -493,7 +539,7 @@ class Utils_RecordBrowser extends Module {
         $args = func_get_args();
         array_shift($args);
         Base_BoxCommon::push_module(Utils_RecordBrowser::module_name(),$func,$args,array(self::$clone_result!==null?self::$clone_tab:$this->getTab()),md5($this->get_path()).'_r');
-        $this->navigation_executed = true;
+        $this->navigationExecuted = true;
         return false;
     }
     public function back(){
@@ -671,10 +717,9 @@ class Utils_RecordBrowser extends Module {
     	$gb = $this->getGenericBrowser();
     	
     	$search = $gb->get_search_query(true);
-    	$ret = [];
-    	if ($this->search_calculated_callback) {
-    		$ret = call_user_func($this->search_calculated_callback, $search);
-    	}
+
+    	$ret = is_callable($this->searchCritsCallback)? call_user_func($this->searchCritsCallback, $search): [];
+
     	if ($gb->is_adv_search_on()) {
     		foreach ($search as $k => $v) {
     			$field = $this->getRecordset()->getField($k);
@@ -751,20 +796,23 @@ class Utils_RecordBrowser extends Module {
     }
     
     protected function getAddRecordHref($createShortcut = false) {
-    	if ($this->add_button === false || $this->get_access('add', $this->custom_defaults)===false) return;
+    	if ($this->add_button === false) return;
     	
-    	if ($this->multiple_defaults) {
-    		$href =  Utils_RecordBrowserCommon::create_new_record_href($this->getTab(), $this->custom_defaults, 'multi', true, true);
+    	$href = false;
+    	if ($this->multipleDefaults) {
+    		$href = Utils_RecordBrowserCommon::create_new_record_href($this->getTab(), $this->multipleDefaults, 'multi', true, true);
     	}
     	else {
     		if ($this->add_button === null) {
-    			$args = ['view_entry', 'add', null, $this->custom_defaults];
-    			$href = $this->create_callback_href([$this,'navigate'], $args);
+    			if (!$this->get_access('add', $this->customDefaults)) return;
+    			
+    			$args = ['view_entry', 'add', null, $this->customDefaults];
+    			$href = $this->create_callback_href([$this, 'navigate'], $args);
     			
     			if ($createShortcut) {
-    				Utils_ShortcutCommon::add(['Ctrl','N'], 'function(){' . $this->create_callback_href_js([$this,'navigate'], $args) . '}');
+    				Utils_ShortcutCommon::add(['Ctrl', 'N'], 'function(){' . $this->create_callback_href_js([$this, 'navigate'], $args) . '}');
     			}
-    		} elseif($this->add_button!=='') {
+    		} elseif ($this->add_button !== '') {
     			$href = $this->add_button;
     		}
     	}
@@ -1088,8 +1136,8 @@ class Utils_RecordBrowser extends Module {
 		Base_HelpCommon::screen_name('rb_'.$mode.'_'.$this->getTab());
         if (isset($_SESSION['client']['recordbrowser']['admin_access'])) Utils_RecordBrowserCommon::$admin_access = true;
         self::$mode = $mode;
-        if ($this->navigation_executed) {
-            $this->navigation_executed = false;
+        if ($this->navigationExecuted) {
+            $this->navigationExecuted = false;
             return true;
         }
         if ($this->check_for_jump()) return;
@@ -1118,7 +1166,7 @@ class Utils_RecordBrowser extends Module {
         if ($id!==null && is_numeric($id)) Utils_WatchdogCommon::notified($this->getTab(), $id);
 
         if($mode == 'add') {
-        	$this->custom_defaults = $this->getRecordset()->getDefaultValues(array_merge($this->custom_defaults, $defaults));
+        	$this->customDefaults = $this->getRecordset()->getDefaultValues(array_merge($this->customDefaults, $defaults));
 		}
 
 		$viewAccess = $this->getUserFieldAccess('view');
@@ -1398,11 +1446,11 @@ class Utils_RecordBrowser extends Module {
     } //view_entry
 	
 	public function getUserFieldAccess($mode) {
-		if ($mode != 'add' && !$this->record) {
-			return false;
-		}
+// 		if ($mode != 'add'/*  && !$this->record */) {
+// 			return false;
+// 		}
 		
-		$record = $this->record?? $this->custom_defaults;
+		$record = $this->record?? $this->customDefaults;
 		
 		if (Acl::i_am_admin()) {
 			Utils_RecordBrowserCommon::$admin_access = true;
@@ -1450,7 +1498,7 @@ class Utils_RecordBrowser extends Module {
         $theme->assign('required_note', __('Indicates required fields.'));
 
         $theme->assign('caption',_V($this->caption) . $this->get_jump_to_id_button());
-        $theme->assign('icon',$this->icon);
+        $theme->assign('icon',$this->getIcon());
 
         $theme->assign('main_page',$main_page);
 
@@ -1545,12 +1593,12 @@ class Utils_RecordBrowser extends Module {
     }
 
     protected function createQFfields($form, $mode, $forFields = null, $for_grid=false) {    	
-    	$dp = $this->getRecordset()->process($mode == 'add'? $this->custom_defaults: $this->record, $mode=='view' || $mode=='history'? 'view': $mode.'ing');
+    	$dp = $this->getRecordset()->process($mode == 'add'? $this->customDefaults: $this->record, $mode=='view' || $mode=='history'? 'view': $mode.'ing');
     	
     	if ($dp===false) return false;
     	
     	if (is_array($dp)) {
-    		$defaults = $this->custom_defaults = self::$last_record = $this->record = $dp;
+    		$defaults = $this->customDefaults = self::$last_record = $this->record = $dp;
     	}
     		
     	self::$last_record = self::$last_record?: $defaults;
@@ -1582,7 +1630,7 @@ class Utils_RecordBrowser extends Module {
 				$field['id'] = $nk;
 			}
 
-			$field->createQFfield($form, $mode, $record, $this->custom_defaults, $this);
+			$field->createQFfield($form, $mode, $record, $this->customDefaults, $this);
 			
 			if (($mode==='edit' || $mode==='add') && ! $this->checkFieldAccess($field['id'], $modeAccess)) {
 				$form->freeze($field['id']);
@@ -1618,7 +1666,7 @@ class Utils_RecordBrowser extends Module {
 			}
 			
 			$values[':id'] = $this->record[':id']?? null;
-			foreach ($this->custom_defaults as $k => $v) {
+			foreach ($this->customDefaults as $k => $v) {
 				$values[$k] = $values[$k]?? $v;
 			}
 
@@ -1801,10 +1849,35 @@ class Utils_RecordBrowser extends Module {
         Utils_RecordBrowserCommon::set_active($this->getTab(), $id, $state);
         return false;
     }
-    public function set_defaults($arg, $multiple=false){
-        foreach ($arg as $k=>$v)
-            $this->custom_defaults[$k] = $v;
-        if ($multiple) $this->multiple_defaults = true;
+    /**
+     * @param array $arg
+     * @param boolean $multiple
+     * @deprecated use setDefaults or setMultipleDefaults
+     */
+    public function set_defaults($arg, $multiple=false) {
+    	return $multiple? $this->setMultipleDefaults($arg): $this->setDefaults($arg);
+    }
+    
+    public function setDefaults($defaults) {
+    	$this->customDefaults = array_merge($this->customDefaults, $defaults?: []);
+    	
+    	return $this;
+    }
+    
+    public function setMultipleDefaults($multipleDefaults) {
+    	$values = [];
+    	foreach ($multipleDefaults as $label => $options) {
+    		$options['label'] = $options['label']?? $label;
+    		
+    		$values[] = array_merge([
+    				'icon' => '',
+    				'defaults' => []
+    		], $options);
+    	}
+    	
+    	$this->multipleDefaults = $values;
+    	
+    	return $this;
     }
 	public function crm_perspective_default() {
 		return '__PERSPECTIVE__';
@@ -1932,7 +2005,7 @@ class Utils_RecordBrowser extends Module {
         $form->setDefaults(array('recordset'=>$tab));
         $form->display_as_column();
         if ($tab) {
-        	$this->pack_module('Utils_RecordBrowser#Admin', $tab);
+        	$this->pack_module('Utils_RecordBrowser#Admin', null, null, $tab);
 		}
         $custom_recordsets_module = 'Utils/RecordBrowser/CustomRecordsets';
         if (ModuleManager::is_installed($custom_recordsets_module) >= 0) {
@@ -2102,8 +2175,8 @@ class Utils_RecordBrowser extends Module {
 			if (!$params) trigger_error('There is no such recordset as '.$this->tab.'.', E_USER_ERROR);
 
 			$this->clipboard_pattern = $this->recordset->getClipboardPattern();
-			$this->caption = $this->recordset->getCaption();
-			$this->icon = $this->recordset->getIcon();
+			$this->setCaption($this->recordset->getCaption());
+			$this->setIcon($this->recordset->getIcon());
 			$this->recent = $this->recordset->getProperty('recent');
 			$this->full_history = $this->recordset->getProperty('full_history');
 		}

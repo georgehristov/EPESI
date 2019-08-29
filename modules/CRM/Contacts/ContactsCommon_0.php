@@ -425,7 +425,7 @@ class CRM_ContactsCommon extends ModuleCommon {
         $ret = '';
 		$format = Base_User_SettingsCommon::get('CRM_Contacts','contact_format');
 		$label = trim(str_replace(array('##l##','##f##'), array($record['last_name'], $record['first_name']), $format));
-		
+
         return Utils_RecordBrowserCommon::create_linked_text($label, 'contact', $record['id'], $nolink,
 				array(array('CRM_ContactsCommon','contact_get_tooltip'), array($record)));
     }
@@ -1365,10 +1365,10 @@ class CRM_ContactsCommon extends ModuleCommon {
 
         return [
         		Utils_RecordBrowser_Crits_Placeholder::create('USER', __('User Contact'), "contact/$my_contact_id")->setAvailable(function(Utils_RecordBrowser_Recordset_Field $field) {
-        			return in_array($field->getType(), ['select', 'multiselect']) && in_array('contact', $field['param']['select_tabs']);
+        			return (in_array($field->getType(), ['select', 'multiselect']) && in_array('contact', $field['param']['select_tabs'])) || ($field->getType() === 'id' && $field->getTab() == 'contact');
         		}),
         		Utils_RecordBrowser_Crits_Placeholder::create('USER_COMPANY', __('User Company'), "company/$my_company_id")->setAvailable(function(Utils_RecordBrowser_Recordset_Field $field) {
-        			return in_array($field->getType(), ['select', 'multiselect']) && in_array('company', $field['param']['select_tabs']);
+        			return (in_array($field->getType(), ['select', 'multiselect']) && in_array('company', $field['param']['select_tabs']))  || ($field->getType() === 'id' && $field->getTab() == 'company');
         		}),
         ];
     }

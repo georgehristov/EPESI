@@ -116,11 +116,29 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	public function defaultValue() {
 		return '';
 	}
+	
+	public static function defaultStyle() {
+		return '';
+	}
 
+	/**
+	 * If field value can be used to describe the record
+	 * EPESI takes the first field to create the record link text if all other methods fail 
+	 * 
+	 * @return boolean
+	 */
+	public function isDescriptive() {
+		return false;
+	}
+	
 	public function isEmpty($record) {
 		if (is_array($record[$this->getId()])) return empty($record[$this->getId()]);
 		
 		return $record[$this->getId()] == '';
+	}
+	
+	public function isStored() {
+		return $this->getSqlId() && $this->getSqlType();
 	}
 	
 	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
@@ -161,28 +179,46 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return Utils_RecordBrowser_Crits::create(['~'.$this->getId() => "%$word%"]);
 	}
 		
-	public function validate($values, Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits) {
-		$value = $this->decodeValue($values[$this->getId()] ?? '', false);
-		$crit_value = $crits->getValue()->getValue();
+	public function validate(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $value) {
+		$value = $this->decodeValue($value, false);
+		$critValue = $crits->getValue()->getValue();
 		
 		$result = false;
 		if (is_array($value)) {
-			$result = $crit_value? in_array($crit_value, $value): empty($value);
+			$result = $critValue? in_array($critValue, $value): empty($value);
 			
 			if ($crits->getOperator()->getOperator() == '!=') $result = !$result;
 		}
 		else switch ($crits->getOperator()->getOperator()) {
-			case '>': $result = ($value > $crit_value); break;
-			case '>=': $result = ($value >= $crit_value); break;
-			case '<': $result = ($value < $crit_value); break;
-			case '<=': $result = ($value <= $crit_value); break;
-			case '!=': $result = ($value != $crit_value); break;
-			case '=': $result = ($value == $crit_value); break;
-			case 'LIKE': $result = $this->checkLikeMatch($value, $crit_value); break;
-			case 'NOT LIKE': $result = !$this->checkLikeMatch($value, $crit_value); break;
+			case '>': $result = ($value > $critValue); break;
+			case '>=': $result = ($value >= $critValue); break;
+			case '<': $result = ($value < $critValue); break;
+			case '<=': $result = ($value <= $critValue); break;
+			case '!=': $result = ($value != $critValue); break;
+			case '=': $result = ($value == $critValue); break;
+			case 'LIKE': $result = $this->checkLikeMatch($value, $critValue); break;
+			case 'NOT LIKE': $result = !$this->checkLikeMatch($value, $critValue); break;
 		}
 		
 		return $result;
+	}
+	
+	public function toWords(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crits, $asHtml = true) {
+		$key = $this->getLabel();
+		
+		$value = $this->getValueToWords($crits->getValue()->getValue());
+
+		$operand = $crits->getOperator()->toWords();
+		
+		if ($asHtml) {
+			$key = "<strong>$key</strong>";
+			
+			$value = "<strong>$value</strong>";
+		}
+			
+		$ret = "{$key} {$operand} {$value}";
+		
+		return $asHtml? $ret: html_entity_decode($ret);
 	}
 	
 	public static function defaultQFfieldCallback($form, $field, $label, $mode, $default, $desc, $rb_obj) {}
@@ -283,10 +319,38 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	 *
 	 * @return array | null
 	 */
-	public function queryBuilderFilters() {}
+	public function queryBuilderFilters($opts = []) {}
 	
 	
+	final public function getQueryBuilderFilters() {
+
+		$placeholderFilters = [];
+		
+		if ($values = $this->getPlaceholderSelectList()) {
+			$placeholderFilters[] = [
+					'id' => $this->getId() . '_placeholder',
+					'field' => $this->getId(),
+					'label' => $this->getLabel() . ' (' . __('placeholder') . ')',
+					'type' => 'boolean',
+					'input' => 'select',
+					'values' => $values
+			];
+		}
+
+		return array_merge($placeholderFilters, $this->queryBuilderFilters()?: []);
+	}
 	
+	final public function getPlaceholderSelectList() {
+		$ret = [];
+		foreach (Utils_RecordBrowser_Crits::getPlaceholders() as $placeholder) {
+			if (! $placeholder->getAvailable($this)) continue;
+			
+			$ret[$placeholder->getKey()] = '[' . $placeholder->getLabel() . ']';
+		}
+
+		return $ret;
+	}
+		
 	// *********** Final methods for the field class *********** //
 	
 	/**
@@ -477,12 +541,24 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		$callback($form, $this->getId(), $this->getQFfieldLabel(), $mode, $default, $this, $rb_obj, []);
 	}
 	
-	final public function getDisplayValue($record, $nolink=false) {
+	public function getDisplayValue($record, $nolink=false) {
 		return $this->display($record, $nolink);
 	}
 	
 	final public function getValue($record) {
 		return $record[$this->getArrayId()];
+	}
+	
+	final public function getValueToWords($value) {
+		if (is_bool($value)) {
+			$value = $value ? __('true') : __('false');
+		} elseif ($value === '' || $value === null) {
+			$value = __('empty');
+		} else {
+			$value = $this->display([$this->getArrayId() => $value], true);
+		}
+
+		return $value;
 	}
 	
 	/**
@@ -494,9 +570,9 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		static $recurrence = [];
 
 		if(!isset($record['id'])) $record['id'] = null;
-		if (!isset($record[$this['id']])) trigger_error($this['id'].' - unknown field for record '.print_r($record, true), E_USER_ERROR);
+		if (!isset($record[$this->getArrayId()])) trigger_error($this['id'].' - unknown field for record '.print_r($record, true), E_USER_ERROR);
 		
-		$val = $record[$this['id']];
+		$val = $record[$this->getArrayId()];
 		
 		$function_call_id = implode('|', [$this->getTab(), $this['id'], serialize($val)]);
 		if (isset($recurrence[$function_call_id])) {

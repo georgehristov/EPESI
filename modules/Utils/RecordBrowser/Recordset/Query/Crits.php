@@ -88,7 +88,11 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
         return $crits;
     }
 
-    final protected static function getPlaceholders($user = null)
+    /**
+     * @param integer $user
+     * @return Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder[]
+     */
+    final public static function getPlaceholders($user = null)
     {
         static $cache = [];
         
@@ -101,6 +105,8 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
 
                 /** @var Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder $placeholder */
                 foreach (is_array($ret)? $ret: [$ret] as $placeholder) {
+                	if (! $placeholder instanceof Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder) continue;
+                	
                 	$key = $placeholder->getKey();
                 	
                 	if (!isset($cache[$user][$key])	|| $cache[$user][$key]->getPriority() < $placeholder->getPriority()) {
@@ -120,9 +126,11 @@ abstract class Utils_RecordBrowser_Recordset_Query_Crits
     
     final public static function parseModifiers($key)
     {
-    	$result = preg_split( '/[a-zA-Z:_\[\]0-9\s]/i' , $key, -1, PREG_SPLIT_NO_EMPTY);
+    	$matches = [];
     	
-    	return $result? reset($result): '';
+    	$result = preg_match( '/^(.*?)(?=[a-zA-Z:_\[\]0-9\s])/i' , $key, $matches);
+    	
+    	return $result? $matches[0]: '';
     }
         
     public function deactivate()

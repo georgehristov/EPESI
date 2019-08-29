@@ -41,15 +41,8 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic extends Utils_RecordBrowse
     	if (! $this->isActive()) return [];
     	
     	if (! $field = $this->getField($recordset)) return [];
-    	
-    	if ($callback = $this->getValue()->getCallback()) {
-    		$valid = is_callable($callback)? call_user_func_array($callback, [$values, $field]): true;
-    	}
-    	else {
-    		$valid = $field->validate($values, $this);
-    	}
-    	
-    	return $valid? []: [$this];
+
+    	return $field->validate($this, $values[$field->getArrayId()]?? '')? []: [$this];
     }
     
     public function negate()
@@ -139,47 +132,21 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic extends Utils_RecordBrowse
 		return $field->getQuery($this->toFinal($recordset));
 	}
 	
-	protected function getField($recordset)
+	public function getField($recordset)
 	{
 		return Utils_RecordBrowser_Recordset::create($recordset)->getField($this->getKey()->getField(), true);
 	}
 	
 	public function toWords($recordset, $asHtml = true)
 	{
+		$recordset = Utils_RecordBrowser_Recordset::create($recordset);
+		
 		/**
 		 * @var Utils_RecordBrowser_Recordset_Field $field
 		 */
 		if (! $field = $this->getField($recordset)) return '';
-		
-		$crits = $this->toFinal($recordset, true);
 
-		$value = '';		
-		$subquery = false;		
-		if ($subfield = $crits->getKey()->getSubfield()) {
-			if ($tab2 = $field->getParam('single_tab')) {
-				$crits2 = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($subfield, $crits->getValue(), $crits->getOperator());
-				
-				$value = $crits2->toWords($tab2, $asHtml);
-				
-				$subquery = true;
-			}
-		}
-		
-		$value = $subquery? $value: $crits->getValue()->toWords($field);
-		
-		$key = $field->getLabel();
-		
-		if ($asHtml) {
-			$key = "<strong>$key</strong>";
-			
-			$value = $subquery? $value: '<strong>' . $value . '</strong>';
-		}
-		
-		$operand = $subquery? __('is set to record where'): $crits->getOperator()->toWords();
-		
-		$ret = "{$key} {$operand} {$value}";
-
-		return $asHtml? $ret: html_entity_decode($ret);
+		return $field->toWords($this->toFinal($recordset, true), $asHtml);
 		
 		//return Utils_RecordBrowser_Recordset_Query_Crits_Compound::create(['company_name[company_name]' => 'aaa'])->toWords('contact');
 		return Utils_RecordBrowser_Recordset_Query_Crits_Compound::create(['company_name[company_name]' => 'aaa', 'first_name'=>'ddd'])->getQuery('contact');

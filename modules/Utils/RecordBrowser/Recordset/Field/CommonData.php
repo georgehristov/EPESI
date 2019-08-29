@@ -129,6 +129,10 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     	return $ret;
     }
     
+    public function isDescriptive() {
+    	return $this->isVisible() && $this->isRequired();
+    }
+    
     public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
     	$ret = '';
     	
@@ -160,5 +164,20 @@ class Utils_RecordBrowser_Recordset_Field_CommonData extends Utils_RecordBrowser
     	
     	if ($mode !== 'add')
     		$form->setDefaults([$field => $default]);
-    }   
+    }
+    
+    public function queryBuilderFilters($opts = []) {
+    	$param = $this['param'];
+
+    	return [
+    			[
+    					'id' => $this->getId(),
+    					'field' => $this->getId(),
+    					'label' => $this->getLabel(),
+    					'type' => 'boolean',
+    					'input' => 'select',
+    					'values' => ['' => '['.__('Empty').']'] + (Utils_CommonDataCommon::get_translated_array($param['array_id'], $param['order'], false, true)?: [])
+    			]
+    	];
+    }
 }

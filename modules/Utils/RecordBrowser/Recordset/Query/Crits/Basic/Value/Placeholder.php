@@ -34,7 +34,12 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Basic_Value_Placeholder
 
     public function getValue($humanReadable = false)
     {
-    	return $humanReadable? $this->label: $this->value;
+    	return $humanReadable? $this->getLabel(): $this->value;
+    }
+    
+    public function getLabel()
+    {
+    	return _V($this->label);
     }
 
     /**
