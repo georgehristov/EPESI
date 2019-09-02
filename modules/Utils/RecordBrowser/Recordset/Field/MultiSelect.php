@@ -3,7 +3,6 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowser_Recordset_Field_Select {
-	protected $multiselect = true;
 	
 	public static function typeKey() {
 		return 'multiselect';
@@ -103,5 +102,23 @@ class Utils_RecordBrowser_Recordset_Field_MultiSelect extends Utils_RecordBrowse
 		}
 
 		return $values;
+	}
+	
+	public function getDefaultQuery($operator, $operand, $value) {
+		$value = "%\\_\\_{$value}\\_\\_%";
+		$operator = DB::like();
+		$operand = '%s';
+		
+		return $this->getRecordset()->createQuery("{$this->getSqlId()} $operator $operand", [$value]);
+	}
+	
+	public function getSubQuery($recordset, $crits) {
+		if ($crits->isEmpty()) return $this->getRecordset()->createQuery();
+		
+		$recordset = Utils_RecordBrowser_Recordset::create($recordset)->setDataTableAlias('sub');
+
+		$query = Utils_RecordBrowser_Recordset_Query::merge($recordset->getQuery($crits), $recordset->createQuery("{$this->getQueryId()} LIKE CONCAT('%__', sub.id, '__%')"));
+
+		return $this->getRecordset()->createQuery("EXISTS ({$query->getSelectIdSql()})", $query->getValues());
 	}
 }

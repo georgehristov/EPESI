@@ -20,7 +20,7 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedBy extends Utils_Record
 	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
-		return is_numeric($value = $record[$desc['id']])? Base_UserCommon::get_user_login($value): $value;
+		return is_numeric($value = $record[$desc->getArrayId()])? Base_UserCommon::get_user_login($value): $value;
 	}
 	
 	public function getSqlId() {
