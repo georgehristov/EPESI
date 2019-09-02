@@ -1,6 +1,6 @@
 <?php defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Base_Print_Document_HTML extends Base_Print_Document_Document
+class Base_Print_Document_HTML extends Base_Print_Document
 {
     private $text;
 
@@ -19,9 +19,8 @@ class Base_Print_Document_HTML extends Base_Print_Document_Document
         $this->text .= $html;
     }
 
-    public function get_output()
+    public function contents()
     {
-
         return $this->html_header() . $this->text . $this->html_footer();
     }
 

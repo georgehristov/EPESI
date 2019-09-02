@@ -209,6 +209,7 @@ class Utils_RecordBrowser extends Module {
     public function disable_quickjump(){$this->disabled['quickjump'] = true;}
     public function disable_headline() {$this->disabled['headline'] = true;}
     public function disable_pdf() {$this->disabled['pdf'] = true;}
+    public function disable_print() {$this->disabled['pdf'] = true;}
     public function disable_export() {$this->disabled['export'] = true;}
     public function disable_actions($arg=true) {$this->disabled['actions'] = $arg;}
     public function disable_pagination($arg=true) {$this->disabled['pagination'] = $arg;}
@@ -643,27 +644,38 @@ class Utils_RecordBrowser extends Module {
         if ($limit === null && !$this->disabled['pagination'])
             $limit = $gb->get_limit($this->amount_of_records);
 
-		if (!$this->disabled['pdf'] && !$pdf && $this->get_access('print')) {
-            $limited_print_records = 200;
-            $limited_print = ($this->amount_of_records >= $limited_print_records);
-            $print_limit = $limited_print ? $limit : null;
-            $key = md5(serialize($this->tab).serialize($crits).serialize($cols).serialize($order).serialize($admin).serialize($print_limit));
-            $_SESSION['client']['utils_recordbrowser'][$key] = array(
-                'tab'=>$this->tab,
-                'crits'=>$crits,
-                'cols'=>$cols,
-                'order'=>$order,
-                'admin'=>$admin,
-                'more_table_properties'=>$this->more_table_properties,
-                'limit' => $print_limit,
-            );
-            $print_href = 'href="modules/Utils/RecordBrowser/print.php?'.http_build_query(array('key'=>$key, 'cid'=>CID)).'" target="_blank"';
-            $print_tooltip_text = $limited_print ?
-                __('Due to more than %d records, you are allowed to print current view', array($limited_print_records)) :
-                __('Print all records');
-            $print_tooltip = Utils_TooltipCommon::open_tag_attrs($print_tooltip_text, false);
-            $this->new_button('print', __('Print'), "$print_href $print_tooltip");
-	}
+        if (!$pdf && $this->get_access('print')) {
+        	$limited_print_records = 200;
+        	$limited_print = ($this->amount_of_records >= $limited_print_records);
+        	$print_limit = $limited_print ? $limit : null;
+        	$key = md5(serialize($this->tab).serialize($crits).serialize($cols).serialize($order).serialize($admin).serialize($print_limit));
+        	$_SESSION['client']['utils_recordbrowser'][$key] = array(
+        			'tab'=>$this->tab,
+        			'crits'=>$crits,
+        			'cols'=>$cols,
+        			'order'=>$order,
+        			'admin'=>$admin,
+        			'more_table_properties'=>$this->more_table_properties,
+        			'limit' => $print_limit,
+        	);
+
+        	$printer = Utils_RecordBrowserCommon::get_printer($this->tab, [
+					'tab' => $this->tab,
+					'mode' => 'browse',
+					'key' => $key,
+        			'document_type' => 'print'
+			]);
+        	
+        	$print_href = $printer->get_href()?: 'href="modules/Utils/RecordBrowser/print.php?'.http_build_query(['key'=>$key, 'cid'=>CID]).'" target="_blank"';
+        	
+        	$print_tooltip_text = $limited_print ?
+        	__('Due to more than %d records, you are allowed to print current view', array($limited_print_records)) :
+        	__('Print all records');
+        	$print_tooltip = Utils_TooltipCommon::open_tag_attrs($print_tooltip_text, false);
+
+        	if (!$this->disabled['pdf'])
+        		$this->new_button('print', __('Print'), "$print_href $print_tooltip");
+        }
          
         $records = Utils_RecordBrowserCommon::get_records($this->tab, $crits, array(), $order, $limit, $admin);
         if(!$records) {
@@ -1131,10 +1143,10 @@ class Utils_RecordBrowser extends Module {
                 }
                 if($this->get_access('print',$this->record)) {
                     /** @var Base_Print_Printer $printer */
-                    $printer = Utils_RecordBrowserCommon::get_printer($this->tab);
-                    if ($printer) {
-                        Base_ActionBarCommon::add('print', __('Print'), $printer->get_href(array('tab' => $this->tab, 'record_id' => $this->record['id'])));
-                    }
+	                $data = array('tab' => $this->tab, 'record_id' => $this->record['id'], 'mode'=>$mode);
+	                if ($printer = Utils_RecordBrowserCommon::get_printer($this->tab, $data)) {
+	                	Base_ActionBarCommon::add('print', __('Print'), $printer->get_href($data));
+	                }
                 }
                 if ($show_actions===true || (is_array($show_actions) && (!isset($show_actions['back']) || $show_actions['back'])))
                     Base_ActionBarCommon::add('back', __('Back'), $this->create_back_href());

@@ -1,6 +1,6 @@
 <?php defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Base_Print_Document_PDF extends Base_Print_Document_Document
+class Base_Print_Document_PDF extends Base_Print_Document
 {
     private $pdf;
     private $content_length;
@@ -8,42 +8,58 @@ class Base_Print_Document_PDF extends Base_Print_Document_Document
     private $subject='';
     private $title='';
     private $logo=null;
-    private $output = null;
+    private $contents = null;
 
     private $margin_top;
     private $margin_left;
     private $margin_right;
     private $margin_bottom;
     private $margin_footer;
+    
+    private $font_family;
+    private $font_style;
+    private $font_size;
 
     private $orientation = 'P';
     
     public function __construct($config = array()) {
-        if(is_array($config)) {
-            $this->printed_by = !isset($config['printed_by']) || $config['printed_by'];
-            $this->title = array_key_exists('title',$config)?$config['title']:'';
-            $this->subject = array_key_exists('subject',$config)?$config['subject']:'';
-            $this->logo = array_key_exists('logo',$config)?$config['logo']:null;
-            $this->margin_top = array_key_exists('margin_top',$config)?$config['margin_top']:null;
-            $this->margin_left = array_key_exists('margin_left',$config)?$config['margin_left']:null;
-            $this->margin_right = array_key_exists('margin_right',$config)?$config['margin_right']:null;
-            $this->margin_bottom = array_key_exists('margin_bottom',$config)?$config['margin_bottom']:null;
-            $this->margin_footer = array_key_exists('margin_footer',$config)?$config['margin_footer']:null;
-            $this->orientation = array_key_exists('orientation',$config)?$config['orientation']:null;
-        }
-    }
+        if(!is_array($config)) return;
+        
+		$this->printed_by = ! isset($config['printed_by']) || $config['printed_by'];
+		$this->title = $config['title'] ?? '';
+		$this->subject = $config['subject'] ?? '';
+		$this->logo = $config['logo'] ?? null;
+		$this->margin_top = $config['margin_top'] ?? null;
+		$this->margin_left = $config['margin_left'] ?? null;
+		$this->margin_right = $config['margin_right'] ?? $this->margin_left;
+		$this->margin_bottom = $config['margin_bottom'] ?? null;
+		$this->margin_footer = $config['margin_footer'] ?? null;
+		$this->orientation = $config['orientation'] ?? null;
+		$this->font_family = $config['font_family'] ?? Libs_TCPDFCommon::$default_font;
+		$this->font_style = $config['font_style'] ?? '';
+		$this->font_size = $config['font_size'] ?? 0;
+	}
 
     public function document_type_name()
     {
         return 'PDF';
     }
     
+    public static function type()
+    {
+        return 'print';
+    }
+    
     public function init($data)
     {
         $this->pdf = Libs_TCPDFCommon::new_pdf($this->orientation);
+        
         $this->set_margins();
+        
         Libs_TCPDFCommon::prepare_header($this->pdf,$this->title,$this->subject,$this->printed_by,$this->logo);
         Libs_TCPDFCommon::add_page($this->pdf);
+        Libs_TCPDFCommon::SetFont($this->pdf, $this->font_family, $this->font_style, $this->font_size);
+        
         $this->set_filename_extension('pdf');
     }
 
@@ -52,29 +68,26 @@ class Base_Print_Document_PDF extends Base_Print_Document_Document
         Libs_TCPDFCommon::writeHTML($this->pdf, $html, false);
     }
 
-    public function get_output()
+    public function contents()
     {
-        if ($this->output) {
-            return $this->output;
+        if (!$this->contents) {           
+	        $this->append_footers();
+	        $this->contents = Libs_TCPDFCommon::output($this->pdf);
+	        $this->content_length = strlen($this->contents);
         }
-        $this->append_footers();
-        $this->output = Libs_TCPDFCommon::output($this->pdf);
-        $this->content_length = strlen($this->output);
-        return $this->output;
+        return $this->contents;
     }
 
     protected function set_margins()
     {
-        if (!isset($this->margin_top)) {
-            $this->margin_top = PDF_MARGIN_TOP;
-        }
-        if (!isset($this->margin_left)) {
-            $this->margin_left = PDF_MARGIN_LEFT;
-        }
-        if (!isset($this->margin_right)) {
-            $this->margin_right = $this->margin_left;
-        }
+       	$this->margin_top = $this->margin_top?? PDF_MARGIN_TOP;
+
+       	$this->margin_left = $this->margin_left?? PDF_MARGIN_LEFT;
+       	
+       	$this->margin_right = $this->margin_right?? $this->margin_left;
+
         $this->pdf->SetMargins($this->margin_left, $this->margin_top, $this->margin_right, true);
+        
         if (isset($this->margin_bottom)) {
             $this->pdf->SetAutoPageBreak(true, $this->margin_bottom);
         }
@@ -151,14 +164,12 @@ class Base_Print_Document_PDF extends Base_Print_Document_Document
     {
         parent::http_headers();
         if ($this->content_length === null) {
-            throw new ErrorException('Call get_output first to calculate output length');
+            throw new ErrorException('Call contents first to calculate output length');
         }
-        $filename = $this->get_filename_with_extension();
+
         header('Content-Type: application/pdf');
         header('Content-Length: ' . $this->content_length);
         header('Cache-Control: no-cache');
-        header('Content-disposition: inline; filename="' . $filename . '"');
+        header('Content-disposition: inline; filename="' . $this->get_filename_with_extension() . '"');
     }
-
-
 }

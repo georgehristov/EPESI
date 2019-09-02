@@ -2,13 +2,48 @@
 
 abstract class Base_Print_Printer
 {
+	protected $data = [];
+	
+    /** @var Base_Print_Document */
+	protected $document;
 
-    /** @var Base_Print_Document_Document */
-    private $document;
-
-    /** @var Base_Print_Template_Template */
-    private $template;
-
+    /** @var Base_Print_Template */
+	protected $template;
+    
+	public static function instance($class, $data = []) {
+		if (!$class || !class_exists($class)) {
+			throw new ErrorException('Wrong printer classname');
+		}
+		if (!is_subclass_of($class, Base_Print_Printer::class)) {
+			throw new ErrorException('Printer class has to extend Base_Print_Printer');
+		}
+		
+		return new $class($data);
+    }
+    
+    /**
+     * @param array $data
+     * @param string $class     * 
+     * @return Base_Print_Printer
+     */
+	public static function create($data = [], $class = null) {
+		$class = $class?: static::class;
+		
+    	return new $class($data);
+    }
+    
+    public function __construct($data = []) {
+    	$this->set_data($data);
+    }
+    
+    public function print() {
+    	print $this->get_document()->get_contents();
+    }
+    
+    public function save($file) {
+    	file_put_contents($file, $this->get_document()->contents());
+    }
+    
     /**
      * Document name is a string used to identify the document type printed
      * by your printer class.
@@ -27,19 +62,44 @@ abstract class Base_Print_Printer
      * $this->print_section('section_name', $section);
      * </code>
      * @param mixed $data This is a value that is passed to get_href method
-     * @see new_section
-     * @see print_section
-     * @see set_footer
+     * @see Base_Print_Printer::new_section()
+     * @see Base_Print_Printer::print_section()
+     * @see Base_Print_Printer::set_footer()
      * @return null It doesn't have to return value
      */
-    abstract protected function print_document($data);
+    abstract protected function print_document();
 
+    protected function additional_params() {
+    	return array();
+    }
+    
     /**
      * @return array
      */
     public function default_templates()
     {
         return array();
+    }
+    
+    /**
+     * @return array
+     */
+    public function enabled_templates()
+    {
+    	/**
+    	 * @var Base_Print_Template $template
+    	 */
+    	$ret = [];
+    	foreach ($this->default_templates() as $id => $template) {
+    		if (!$template->get_name()) {
+    			$template->set_name($id);
+    		}
+    		
+    		if (Base_PrintCommon::is_template_disabled(get_class($this), $id)) continue;
+    		
+    		$ret[$id] = $template;
+    	}
+    	return $ret;
     }
 
     /**
@@ -48,7 +108,7 @@ abstract class Base_Print_Printer
      *
      * @return array Sample data
      */
-    public function sample_data()
+    public function sample_data($opts)
     {
         return array();
     }
@@ -62,76 +122,142 @@ abstract class Base_Print_Printer
      *  Base_ActionBarCommon::add('print', __('Print'), $printer->get_href($data));
      * </code>
      *
-     * @param mixed $data Data that will be passed to print_document method
-     *
      * @return mixed|string By default it should be a string with href="...",
      * but you can override returned value by registering your own callback
      * with Base_PrintCommon::set_print_href_callback method
      */
-    public function get_href($data)
+    public function get_href()
     {
-        $printer = get_class($this);
-        $href = Base_PrintCommon::get_print_href($data, $printer);
-        return $href;
+        return $this->get_print_href();
+    }
+    
+    /**
+     * Get print href string. This method calls custom print href, that may
+     * return array or string. If array is returned then it will be used
+     * to create a leightbox select with buttons and it has to be the array
+     * of arrays('href' => .. , 'label' => ..)
+     *
+     * @return string href to open printed document or to open leightbox
+     *                with buttons if multiple templates are enabled
+     */
+    public final function get_print_href()
+    {
+    	$links = $this->get_print_template_links();
+    	
+    	if (!is_array($links)) return $links;
+    	
+    	return count($links) > 1? Base_PrintCommon::choose_box_href($links): reset($links)['href'];
+    }
+    
+    /**
+     * Get print available templates. This method calls custom print href, that should
+     * return array with href,label and template keys.
+     */
+    public final function get_print_template_links()
+    {
+    	$ret = array();
+    	$callback = Base_PrintCommon::get_print_href_callback();
+    	if ($callback && is_callable($callback)) {
+    		$passed_params = func_get_args();
+    		$ret = call_user_func_array($callback, $passed_params);
+    	}
+    	if (is_array($ret)) {
+    		foreach ($this->enabled_templates() as $id => $template) {
+    			$ret[] = [
+    					'href' => $this->default_href($id),
+    					'label' => _V($template->get_name()?: $id),
+    			];
+    		}
+    	}
+    	return $ret;
+    }
+    
+    public function default_href($template_id)
+    {
+    	$params = array_merge($this->additional_params(), [
+    			'cid' => CID,
+    			'data' => $this->get_data(),
+    			'ut' => time(),
+    			'printer' => get_class($this),
+    			'tpl' => $template_id
+    	]);
+    	
+    	$url = Base_PrintCommon::Instance()->get_module_dir() . 'Handle.php?' . http_build_query($params);
+    	
+    	return ' target="_blank" href="' . $url . '" ';
     }
 
     /**
      * Create a new section of document.
      *
-     * @see print_document
+     * @see Base_Print_Printer::print_document
      *
      * @return Smarty
      */
     protected function new_section()
     {
-        $smarty = Base_ThemeCommon::init_smarty();
-        return $smarty;
-    }
-
-    /**
-     * Set document object for printer.
-     *
-     * @param Base_Print_Document_Document $document
-     */
-    public function set_document(Base_Print_Document_Document $document)
-    {
-        $this->document = $document;
+        return Base_ThemeCommon::init_smarty();
     }
 
     /**
      * Get document object used by printer.
      *
-     * @return Base_Print_Document_Document
+     * @return Base_Print_Document
      */
     public function get_document()
     {
+    	if (!$this->document) {
+    		$this->document = $this->get_template()->create_document($this->get_data());
+    		
+    		$this->print_document();
+    	}
+    	
         return $this->document;
     }
 
     /**
      * Set template used by printer.
      *
-     * @param Base_Print_Template_Template $template
+     * @param Base_Print_Template|string $template
      */
-    public function set_template(Base_Print_Template_Template $template)
+    public function set_template($template, $data = [])
     {
-        $this->template = $template;
+    	if (!is_object($template)) {
+    		$templates = $this->default_templates();
+    		
+    		$id = $template?: key($templates);
+    		
+    		if (!isset($templates[$id])) {
+    			throw new ErrorException('Wrong template');
+    		}
+    		
+    		$template = $templates[$id];
+    	}
+    	
+        $this->template = $template;        
+        
+        return $this;
     }
 
     /**
      * Get template used by printer.
      *
-     * @return Base_Print_Template_Template
+     * @return Base_Print_Template
      */
     public function get_template()
-    {
+    {    	
+    	if (!$this->template) {
+	    	$templates = $this->default_templates();
+	    	$this->set_template(reset($templates));
+    	}
+    	
         return $this->template;
     }
 
     /**
      * Print template section to the document.
      *
-     * @see print_document
+     * @see Base_Print_Printer::print_document
      *
      * @param string $template Section identifier
      * @param Smarty $section Section object with assigned data
@@ -180,43 +306,15 @@ abstract class Base_Print_Printer
         return '';
     }
 
-    /**
-     * Generate document using print_document method and return document object.
-     *
-     * @param $data Data passed to print_document method
-     *
-     * @return Base_Print_Document_Document
-     */
-    public function get_printed_document($data)
-    {
-        $this->get_document()->init($data);
-        $this->check_template();
-        $this->print_document($data);
-        $file_suffix = $this->get_printed_filename_suffix();
-        if ($file_suffix) {
-            $filename = $this->get_document()->get_filename();
-            $this->get_document()->set_filename($filename . ' ' . $file_suffix);
-        }
-        return $this->get_document();
-    }
-    
-    /**
-     * Get document config array.
-     */
-    public function get_document_config() {
-        return array();
-    }
-    
-    /**
-     * Fill the template with default template's sections.
-     */
-    private function check_template()
-    {
-        if (!$this->get_template()) {
-            $templates = $this->default_templates();
-            $first_template = reset($templates);
-            $this->set_template($first_template);
-        }
-    }
+	public function get_data() {
+		return $this->data;
+	}
+
+	public function set_data($data) {
+		$this->data = $data;
+		
+		return $this;
+	}
+
 
 }

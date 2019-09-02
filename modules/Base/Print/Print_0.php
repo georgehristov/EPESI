@@ -23,13 +23,12 @@ class Base_Print extends Module
         $form = $this->init_module(Libs_QuickForm::module_name());
         foreach (Base_PrintCommon::get_registered_printers_translated()
                  as $class_name => $printer_name) {
-            $printer = Base_PrintCommon::printer_instance($class_name);
             $form->addElement('header', $printer_name, $printer_name);
-            foreach ($printer->default_templates() as $tpl_name => $tpl) {
-                $field_id = "$class_name::$tpl_name";
+            foreach (Base_Print_Printer::instance($class_name)->default_templates() as $tpl_id => $tpl) {
+                $field_id = "$class_name::$tpl_id";
                 $field_id = preg_replace('/[^A-Za-z0-9_:]/', '_', $field_id);
-                $form->addElement('checkbox', $field_id, _V($tpl_name));
-                $state = !Base_PrintCommon::is_template_disabled($class_name, $tpl_name);
+                $form->addElement('checkbox', $field_id, _V($tpl_id));
+                $state = !Base_PrintCommon::is_template_disabled($class_name, $tpl_id);
                 $form->setDefaults(array($field_id => $state));
             }
         }
@@ -37,12 +36,11 @@ class Base_Print extends Module
             $values = $form->exportValues();
             foreach (Base_PrintCommon::get_registered_printers_translated()
                      as $class_name => $printer_name) {
-                $printer = Base_PrintCommon::printer_instance($class_name);
-                foreach ($printer->default_templates() as $tpl_name => $tpl) {
-                    $field_id = "$class_name::$tpl_name";
+                foreach (Base_Print_Printer::instance($class_name)->default_templates() as $tpl_id => $tpl) {
+                    $field_id = "$class_name::$tpl_id";
                     $field_id = preg_replace('/[^A-Za-z0-9_:]/', '_', $field_id);
                     $active = isset($values[$field_id]) ? $values[$field_id] : false;
-                    Base_PrintCommon::set_template_disabled($class_name, $tpl_name, $active);
+                    Base_PrintCommon::set_template_disabled($class_name, $tpl_id, $active);
                 }
             }
             $this->parent->reset();

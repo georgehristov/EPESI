@@ -1,24 +1,26 @@
 <?php
 
-
 class Base_Print_Handle
 {
-    private $handler;
-
     private static $epesi_loaded = false;
 
+    public static function create()
+    {
+    	return new static();
+    }
+    
     public function handle_request()
     {
         $this->load_epesi();
-        $this->init_handler();
-        $this->handler->handle_request();
+        
+        $this->create_printer()->print();
     }
 
     protected function load_epesi()
     {
         if (self::$epesi_loaded) return;
 
-        define('CID', false);
+        define('CID', $_REQUEST['cid']?? false);
         define('READ_ONLY_SESSION', true);
         require_once '../../../include.php';
 
@@ -30,23 +32,18 @@ class Base_Print_Handle
         }
     }
 
-    protected function init_handler()
+    protected function create_printer()
     {
-        $handler_class = self::request_param('handler');
-        if (!$handler_class) {
-            $handler_class = 'Base_Print_PrintingHandler';
+    	$printer = Base_Print_Printer::create(self::param('data', true), self::param('printer', true));
+        
+        if (!$printer instanceof Base_Print_Printer) {
+        	throw new ErrorException('Printer must be descendant of class Base_Print_Printer');
         }
-        if (!class_exists($handler_class)) {
-            throw new ErrorException('Wrong usage');
-        }
-        $handler_obj = new $handler_class();
-        if (!($handler_obj instanceof Base_Print_PrintingHandler)) {
-            throw new ErrorException('Wrong printing handler');
-        }
-        $this->handler = $handler_obj;
+        
+        return $printer->set_template(self::param('tpl'));
     }
-
-    protected static function request_param($name, $required = false)
+    
+    protected static function param($name, $required = false)
     {
         $val = null;
         if (!isset($_REQUEST[$name])) {
@@ -58,17 +55,15 @@ class Base_Print_Handle
         }
         return $val;
     }
-
 }
 
 if (!defined('_VALID_ACCESS')) {
     header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
     header("Cache-Control: post-check=0, pre-check=0", false);
     header("Pragma: no-cache");
-    
-    $handler = new Base_Print_Handle();
+
     try {
-        $handler->handle_request();
+    	Base_Print_Handle::create()->handle_request();
     } catch (Exception $ex) {
         die($ex->getMessage());
     }

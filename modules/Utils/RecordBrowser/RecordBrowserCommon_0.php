@@ -3268,13 +3268,15 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return $c2w->to_words($crits);
 	}
 
-    public static function get_printer($tab)
-    {
-        $class = DB::GetOne('SELECT printer FROM recordbrowser_table_properties WHERE tab=%s',$tab);
-        if($class && class_exists($class))
-            return new $class();
-        return new Utils_RecordBrowser_RecordPrinter();
-    }
+	public static function get_printer($tab, $data)
+	{		
+		$class = DB::GetOne('SELECT printer FROM recordbrowser_table_properties WHERE tab=%s',$tab);
+		if($class && class_exists($class)) {
+			$printer = Base_Print_Printer::create($data, $class);
+			if ($printer->default_templates()) return $printer;
+		}
+		return Utils_RecordBrowser_RecordPrinter::create($data);
+	}
     ////////////////////////////
     // default QFfield callbacks
     
