@@ -13,16 +13,16 @@ defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Base_CronCommon extends ModuleCommon
 {
-    public static function admin_caption()
-    {
-        return array('label' => __('Cron'), 'section' => __('Server Configuration'));
-    }
+    public static function admin_caption() {
+		return [
+				'label' => __('Cron'),
+				'section' => __('Server Configuration')
+		];
+	}
 
     public static function get_cron_url()
     {
-        $token = self::load_token();
-        $url = get_epesi_url() . '/cron.php?token=' . $token;
-        return $url;
+        return get_epesi_url() . 'cron.php?token=' . self::load_token();
     }
 
     public static function load_token()
@@ -34,8 +34,7 @@ class Base_CronCommon extends ModuleCommon
         if (!defined('CRON_TOKEN')) {
             require_once $token_file;
         }
-        $token = defined('CRON_TOKEN') ? CRON_TOKEN : '';
-        return $token;
+        return defined('CRON_TOKEN') ? CRON_TOKEN : '';
     }
 
     public static function generate_token()
