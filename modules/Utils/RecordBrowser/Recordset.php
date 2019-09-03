@@ -443,8 +443,41 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return $this->getProperties()[$name]?? null;
 	}
 		
+	public function setProperty($name, $value) {
+		return $this->setProperties([$name => $value]);
+	}
+		
 	public function getProperties() {
 		return $this->properties = $this->properties?: DB::GetRow('SELECT * FROM recordbrowser_table_properties WHERE tab=%s', [$this->getTab()]);
+	}
+		
+	public function setProperties($properties) {
+		$properties = array_merge($this->getProperties(), $properties);
+		
+		DB::Execute('UPDATE 
+						recordbrowser_table_properties 
+					SET 
+						caption=%s,
+						description_pattern=%s,
+						favorites=%b,
+						recent=%d,
+						full_history=%b,
+						jump_to_id=%b,
+						search_include=%d,
+						search_priority=%d 
+					WHERE tab=%s', [
+							$properties['caption'],
+							$properties['description_pattern'],
+							$properties['favorites'],
+							$properties['recent'],
+							$properties['full_history'],
+							$properties['jump_to_id'],
+							$properties['search_include'],
+							$properties['search_priority'],
+							$this->getTab()
+		]);
+		
+		return $this;
 	}
 		
 	public function getClipboardPattern($with_state = false) {
@@ -693,6 +726,16 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	
 	public function getUserFavouriteRecords() {
 		return DB::GetCol('SELECT ' . $this->getTab() . '_id FROM ' . $this->getTab() . '_favorite WHERE user_id=%d', [Acl::get_user()]);
+	}
+	
+	final public function clearSearchIndex()
+	{
+		if ($tab_id = DB::GetOne('SELECT id FROM recordbrowser_table_properties WHERE tab=%s', [$this->getTab()])) {
+			DB::Execute('DELETE FROM recordbrowser_search_index WHERE tab_id=%d', [$tab_id]);
+			DB::Execute('UPDATE ' . $this->getTable('data') . ' SET indexed=0');
+			return true;
+		}
+		return false;
 	}
 }
 

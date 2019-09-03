@@ -13,6 +13,10 @@
 defined("_VALID_ACCESS") || die();
 
 class Utils_RecordBrowser_Admin extends Module {
+	public const ACCESS_RESTRICT = 0;
+	public const ACCESS_VIEW = 1;
+	public const ACCESS_FULL = 2;
+	
 	private $recordset;
 	private $current_field;
 	
@@ -23,8 +27,8 @@ class Utils_RecordBrowser_Admin extends Module {
     public function body() {    	
     	load_js($this->get_module_dir() . 'main.js');
     	
-        $_SESSION['client']['recordbrowser']['admin_access'] = Base_AdminCommon::get_access('Utils_RecordBrowser', 'records')==2;
-        Utils_RecordBrowserCommon::$admin_access = Base_AdminCommon::get_access('Utils_RecordBrowser', 'records')==2;
+    	$_SESSION['client']['recordbrowser']['admin_access'] = $this->check_section_access('records', self::ACCESS_FULL);
+    	Utils_RecordBrowserCommon::$admin_access = $this->check_section_access('records', self::ACCESS_FULL);
 
         $tb = $this->init_module(Utils_TabbedBrowser::module_name());
 		$tabs = [
@@ -36,10 +40,10 @@ class Utils_RecordBrowser_Admin extends Module {
 						'func' => [$this, 'show_data'],
 						'label' => __('Manage Records'),
 						'args' => [
-								array(),
-								array(),
-								array(),
-								Base_AdminCommon::get_access('Utils_RecordBrowser', 'records') == 2
+								[],
+								[],
+								[],
+								$this->check_section_access('records', self::ACCESS_FULL)
 						]
 				],
 				'addons' => [
@@ -60,7 +64,7 @@ class Utils_RecordBrowser_Admin extends Module {
 				]
 		];
 		foreach ( $tabs as $section => $t ) {
-			if (!Base_AdminCommon::get_access('Utils_RecordBrowser', $section)) continue;
+			if (! $this->check_section_access($section)) continue;
 			
 			$tb->set_tab($t['label'], $t['func'], $t['args']?? []);
 		}
@@ -68,69 +72,95 @@ class Utils_RecordBrowser_Admin extends Module {
         $tb->body();
         $tb->tag();
     }
-
-    public function set_addon_active($tab, $pos, $v) {
-        DB::Execute('UPDATE recordbrowser_addon SET enabled=%d WHERE tab=%s AND pos=%d', array($v?1:0, $tab, $pos));
-        return false;
+    
+    public static function get_access_levels_select_list() {
+    	return [
+    			self::ACCESS_RESTRICT => __('No access'),
+    			self::ACCESS_VIEW => __('View'),
+    			self::ACCESS_FULL => __('Full')
+    	];
     }
-
-    public function move_addon($tab, $pos, $v) {
-        DB::StartTrans();
-        DB::Execute('UPDATE recordbrowser_addon SET pos=0 WHERE tab=%s AND pos=%d', array($tab, $pos));
-        DB::Execute('UPDATE recordbrowser_addon SET pos=%d WHERE tab=%s AND pos=%d', array($pos, $tab, $pos+$v));
-        DB::Execute('UPDATE recordbrowser_addon SET pos=%d WHERE tab=%s AND pos=0', array($pos+$v, $tab));
-        DB::CompleteTrans();
-        return false;
+    
+    public function check_section_access($section, $level = self::ACCESS_VIEW) {
+    	return Base_AdminCommon::get_access(Utils_RecordBrowser::module_name(), $section) >= $level?: self::ACCESS_VIEW;
     }
     
     public function settings() {
-        $full_access = Base_AdminCommon::get_access('Utils_RecordBrowser', 'settings')==2;
-        
+    	$full_access = $this->check_section_access('settings', self::ACCESS_FULL);
+
         $form = $this->init_module(Libs_QuickForm::module_name());
-        $r = DB::GetRow('SELECT caption,description_pattern,favorites,recent,full_history,jump_to_id,search_include,search_priority FROM recordbrowser_table_properties WHERE tab=%s',array($this->getTab()));
         $form->addElement('text', 'caption', __('Caption'));
-        $callback = Utils_RecordBrowserCommon::get_description_callback($this->getTab());
-        if ($callback) {
-            echo '<div style="color:red; padding: 1em;">' . __('Description Fields take precedence over callback. Leave them empty to use callback') . '</div>';
-            $form->addElement('static', '', __('Description Callback'), implode('::', $callback))->freeze();
-        }
-        $form->addElement('text', 'description_pattern', __('Description Pattern'), array('placeholder' => __('Record description pattern e.g. %{{first_name}} %{{last_name}}')));
-        $form->addElement('select', 'favorites', __('Favorites'), array(__('No'), __('Yes')));
-        $recent_values = array(0 => __('No'));
-        foreach (array(5, 10, 15, 20, 25) as $rv) { $recent_values[$rv] = "$rv " . __('Records') ; }
-        $form->addElement('select', 'recent', __('Recent'), $recent_values);
-        $form->addElement('select', 'full_history', __('History'), array(__('No'), __('Yes')));
-        $form->addElement('select', 'jump_to_id', __('Jump to ID'), array(__('No'), __('Yes')));
-        $form->addElement('select', 'search_include', __('Search'), array(__('Exclude'), __('Include by default'), __('Include optional')));
-        $form->addElement('select', 'search_priority', __('Search priority'), array(-2=>__('Lowest'),-1=>__('Low'), 0=>__('Default'), 1=>__('High'), 2=>__('Highest')));
         
-	if ($full_access) {
-		Base_ActionBarCommon::add('save', __('Save'), $form->get_submit_form_href());
-	} else {
-		$form->freeze();
-	}
-        if($r) $form->setDefaults($r);
-        $form->display_as_column();
-        if ($full_access) {
-            $clear_index_href = $this->create_confirm_callback_href(__('Are you sure?'), array($this, 'clear_search_index'), array($this->getTab()));
-            echo "<a $clear_index_href>" . __('Clear search index') . "</a>";
-            if ($form->validate()) {
-                DB::Execute('UPDATE recordbrowser_table_properties SET caption=%s,description_pattern=%s,favorites=%b,recent=%d,full_history=%b,jump_to_id=%b,search_include=%d,search_priority=%d WHERE tab=%s',
-                            array($form->exportValue('caption'), $form->exportValue('description_pattern'), $form->exportValue('favorites'), $form->exportValue('recent'), $form->exportValue('full_history'), $form->exportValue('jump_to_id'), $form->exportValue('search_include'), $form->exportValue('search_priority'), $this->getTab()));
-            }
+        if ($callback = $this->getRecordset()->getProperty('description_callback')) {
+            echo '<div style="color:red; padding: 1em;">' . __('Description Fields take precedence over callback. Leave them empty to use callback') . '</div>';
+            
+            $form->addElement('static', '', __('Description Callback'), is_array($callback)? implode('::', $callback): $callback)->freeze();
         }
+        
+        $form->addElement('text', 'description_pattern', __('Description Pattern'), [
+				'placeholder' => __('Record description pattern e.g. %%{{first_name}} %%{{last_name}}')
+		]);
+		$form->addElement('select', 'favorites', __('Favorites'), [
+				__('No'),
+				__('Yes')
+		]);
+        
+        $recent_values = ['[' . __('Deactivate') . ']'];
+        foreach ([5, 10, 15, 20, 25] as $rv) { $recent_values[$rv] =  __('%d Records', [$rv]) ; }
+        $form->addElement('select', 'recent', __('Recent'), $recent_values);
+		
+		$form->addElement('select', 'full_history', __('History'), [
+				__('No'),
+				__('Yes')
+		]);
+		$form->addElement('select', 'jump_to_id', __('Jump to ID'), [
+				__('No'),
+				__('Yes')
+		]);
+		$form->addElement('select', 'search_include', __('Search'), [
+				__('Exclude'),
+				__('Include by default'),
+				__('Include optional')
+		]);
+		$form->addElement('select', 'search_priority', __('Search priority'), [
+				- 2 => __('Lowest'),
+				- 1 => __('Low'),
+				0 => __('Default'),
+				1 => __('High'),
+				2 => __('Highest')
+		]);
+
+		if (! $full_access) {
+			$form->freeze();
+		}
+		
+		if ($defaults = $this->getRecordset()->getProperties()) {
+			$form->setDefaults($defaults);
+		}
+		
+        $form->display_as_column();
+        
+        if (! $full_access) return;
+            
+        $clear_index_href = $this->create_confirm_callback_href(__('Are you sure?'), [$this, 'clear_search_index']);
+        echo "<a $clear_index_href>" . __('Clear search index') . "</a>";
+            
+        if ($form->validate()) {
+        	$this->getRecordset()->setProperties($form->exportValues());
+        }
+        
+        Base_ActionBarCommon::add('save', __('Save'), $form->get_submit_form_href());
     }
 
-    public function clear_search_index($tab)
+    public function clear_search_index()
     {
-        $ret = Utils_RecordBrowserCommon::clear_search_index($tab);
-        if ($ret) {
-            Base_StatusBarCommon::message(__('Index cleared for this table. Indexing again - it may take some time.'));
-        }
+    	if (! $this->getRecordset()->clearSearchIndex()) return;
+
+    	Base_StatusBarCommon::message(__('Index cleared for this table. Indexing again - it may take some time.'));
     }
 
     public function manage_addons() {
-		$full_access = Base_AdminCommon::get_access('Utils_RecordBrowser', 'addons') == 2;
+    	$full_access = $this->check_section_access('addons', self::ACCESS_FULL);
 
         $gb = $this->init_module(Utils_GenericBrowser::module_name(),'manage_addons'.$this->getTab(), 'manage_addons'.$this->getTab());
         
@@ -149,14 +179,29 @@ class Utils_RecordBrowser_Admin extends Module {
             if (isset($gb_row) && $full_access) $gb_row->add_action($this->create_callback_href([$this, 'move_addon'],[$addon['tab'],$addon['pos']-1, +1]), __('Move down'), null, 'move-down');
             $gb_row = $gb->get_new_row();
             $gb_row->add_data($addon['label'], $addon['module'].' -> '.$addon['func'].'()');
-			if ($full_access) {
-				$gb_row->add_action($this->create_callback_href([$this, 'set_addon_active'], [$addon['tab'], $addon['pos'], !$addon['enabled']]), ($addon['enabled']?__('Deactivate'):__('Activate')), null, 'active-'.($addon['enabled']?'on':'off'));
+			
+			if (! $full_access) continue;
+				
+			$gb_row->add_action($this->create_callback_href([$this, 'set_addon_active'], [$addon['tab'], $addon['pos'], !$addon['enabled']]), $addon['enabled']?__('Deactivate'):__('Activate'), null, 'active-'.($addon['enabled']?'on':'off'));
 
-				if (!$first) $gb_row->add_action($this->create_callback_href(array($this, 'move_addon'),array($addon['tab'],$addon['pos'], -1)),'Move up', null, 'move-up');
-				$first = false;
-			}
+			if (!$first) $gb_row->add_action($this->create_callback_href([$this, 'move_addon'], [$addon['tab'],$addon['pos'], -1]), __('Move up'), null, 'move-up');
+			$first = false;
         }
         $this->display_module($gb);
+    }
+    
+    public function set_addon_active($tab, $pos, $v) {
+    	DB::Execute('UPDATE recordbrowser_addon SET enabled=%d WHERE tab=%s AND pos=%d', array($v?1:0, $tab, $pos));
+    	return false;
+    }
+    
+    public function move_addon($tab, $pos, $v) {
+    	DB::StartTrans();
+    	DB::Execute('UPDATE recordbrowser_addon SET pos=0 WHERE tab=%s AND pos=%d', array($tab, $pos));
+    	DB::Execute('UPDATE recordbrowser_addon SET pos=%d WHERE tab=%s AND pos=%d', array($pos, $tab, $pos+$v));
+    	DB::Execute('UPDATE recordbrowser_addon SET pos=%d WHERE tab=%s AND pos=0', array($pos+$v, $tab));
+    	DB::CompleteTrans();
+    	return false;
     }
 
     public function new_page() {
@@ -212,7 +257,7 @@ class Utils_RecordBrowser_Admin extends Module {
         return true;
     }
     public function setup_clipboard_pattern() {
-		$full_access = Base_AdminCommon::get_access('Utils_RecordBrowser', 'pattern')==2;
+    	$full_access = $this->check_section_access('pattern', self::ACCESS_FULL);
         
 		$form = $this->init_module(Libs_QuickForm::module_name());
         
@@ -256,7 +301,7 @@ class Utils_RecordBrowser_Admin extends Module {
         $form->display_as_column();
         
         if ($full_access && $form->validate()) {
-            Utils_RecordBrowserCommon::set_clipboard_pattern($this->getTab(), $form->exportValue('pattern'), $form->exportValue('enable'), true);
+            $this->getRecordset()->setClipboardPattern($form->exportValue('pattern'), $form->exportValue('enable'), true);
         }
     }
     public function setup_loader() {
@@ -267,7 +312,7 @@ class Utils_RecordBrowser_Admin extends Module {
             Utils_RecordBrowserCommon::change_field_position($this->getTab(), $field, $position);
         }
         
-		$full_access = Base_AdminCommon::get_access('Utils_RecordBrowser', 'fields') == 2;
+        $full_access = $this->check_section_access('fields', self::ACCESS_FULL);
 
 		if ($full_access) {
 			Base_ActionBarCommon::add('add',__('New field'),$this->create_callback_href([$this, 'view_field']));
@@ -906,11 +951,11 @@ class Utils_RecordBrowser_Admin extends Module {
 		$ret = DB::Execute('SELECT * FROM '.$this->getTab().'_access AS acs ORDER BY action DESC');
 		
 		$tmp = DB::GetAll('SELECT * FROM '.$this->getTab().'_access_clearance AS acs');
-		$clearance = array();
+		$clearance = [];
 		foreach ($tmp as $t) $clearance[$t['rule_id']][] = $t['clearance'];
 		
 		$tmp = DB::GetAll('SELECT * FROM '.$this->getTab().'_access_fields AS acs');
-		$fields = array();
+		$fields = [];
 		foreach ($tmp as $t) $fields[$t['rule_id']][] = $t['block_field'];
 		
 		$all_clearances = array_flip(Base_AclCommon::get_clearance(true));
@@ -918,8 +963,8 @@ class Utils_RecordBrowser_Admin extends Module {
 		$actions = $this->get_permission_actions();
 		$rules = array();
 		while ($row = $ret->FetchRow()) {
-			if (!isset($clearance[$row['id']])) $clearance[$row['id']] = array();
-			if (!isset($fields[$row['id']])) $fields[$row['id']] = array();
+			$clearance[$row['id']] = $clearance[$row['id']]?? [];
+			$fields[$row['id']] = $fields[$row['id']]?? [];
 			$action = $actions[$row['action']];
 			$crits = Utils_RecordBrowser_Recordset_Access::parseAccessCrits($row['crits']);
 			$crits_text = $crits->toWords($this->getRecordset());
@@ -938,12 +983,19 @@ class Utils_RecordBrowser_Admin extends Module {
 			$color = dechex(255-68*$props).dechex(187+68*$props).'BB';
 			$fields_value = ($c_all_fields-$c_fields).' / '.$c_all_fields;
 			if ($props!=1) $fields_value = Utils_TooltipCommon::create($fields_value, '<b>'.__('Excluded fields').':</b><hr>'.implode('<br>',$fields[$row['id']]), false);
-			$rules[$row['action']][$row['id']] = array(
-				$action, 
-				'<span class="Utils_RecordBrowser__permissions_crits">'.implode(' <span class="joint">'.__('and').'</span><br>',$clearance[$row['id']]).'</span>', 
-				array('value'=>'<span class="Utils_RecordBrowser__permissions_crits">'.$crits_text.'</span>', 'overflow_box'=>false), 
-				array('style'=>'background-color:#'.$color, 'value'=>$fields_value)
-			);
+			
+			$rules[$row['action']][$row['id']] = [
+					$action,
+					'<span class="Utils_RecordBrowser__permissions_crits">' . implode(' <span class="joint">' . __('and') . '</span><br>', $clearance[$row['id']]) . '</span>',
+					[
+							'value' => '<span class="Utils_RecordBrowser__permissions_crits">' . $crits_text . '</span>',
+							'overflow_box' => false
+					],
+					[
+							'style' => 'background-color:#' . $color,
+							'value' => $fields_value
+					]
+			];
 		}
 		foreach ($actions as $a=>$l) {
 			if (!isset($rules[$a])) continue;
@@ -951,14 +1003,14 @@ class Utils_RecordBrowser_Admin extends Module {
 			foreach ($rules[$a] as $id=>$vals) {
 				$gb_row = $gb->get_new_row();
 				$gb_row->add_data_array($vals);
-				if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')==2) {
+				if ($this->check_section_access('permissions', self::ACCESS_FULL)) {
 					$gb_row->add_action($this->create_callback_href(['Base_BoxCommon', 'push_module'], ['Utils_RecordBrowser#Admin', 'edit_permissions_rule', $id, $this->getTab()]), 'edit', __('Edit'));
 					$gb_row->add_action($this->create_callback_href(['Base_BoxCommon', 'push_module'], ['Utils_RecordBrowser#Admin', 'edit_permissions_rule', [$id, true], $this->getTab()]), 'copy', __('Clone rule'), Base_ThemeCommon::get_template_file(Utils_Attachment::module_name(),'copy_small.png'));
 					$gb_row->add_action($this->create_confirm_callback_href(__('Are you sure you want to delete this rule?'), [$this, 'delete_permissions_rule'], [$id]), 'delete', 'Delete');
 				}
 			}
 		}
-		if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')==2) {
+		if ($this->check_section_access('permissions', self::ACCESS_FULL)) {
 			Base_ActionBarCommon::add('add',__('Add new rule'), $this->create_callback_href(['Base_BoxCommon', 'push_module'], ['Utils_RecordBrowser#Admin', 'edit_permissions_rule', [], $this->getTab()]));
 		}
 			
@@ -966,7 +1018,6 @@ class Utils_RecordBrowser_Admin extends Module {
 		$this->display_access_callback_descriptions();
 		$this->display_module($gb);
 		eval_js('Utils_RecordBrowser.permissions.crits_initialized = false;');
-// 		eval_js('utils_recordbrowser__crits_initialized = false;');
 	}
 	public function display_access_callback_descriptions() {
 		$callbacks = Utils_RecordBrowserCommon::get_custom_access_callbacks($this->getTab());
@@ -1002,7 +1053,7 @@ class Utils_RecordBrowser_Admin extends Module {
 	}
 	
 	public function edit_permissions_rule($id = null, $clone = false) {
-		if (Base_AdminCommon::get_access('Utils_RecordBrowser', 'permissions')!=2) {
+		if (! $this->check_section_access('permissions', self::ACCESS_FULL)) {
 			print(__('You are not authorized to view for this page!'));
 			
 			return;
@@ -1011,7 +1062,7 @@ class Utils_RecordBrowser_Admin extends Module {
         if ($this->is_back()) {
             return Base_BoxCommon::pop_main();
 		}
-// 		load_js($this->get_module_dir() . 'edit_permissions.js');
+
 		$all_clearances = [''=>'---'] + array_flip(Acl::get_clearance(true));
 
 		$form = $this->init_module(Libs_QuickForm::module_name());
@@ -1030,7 +1081,7 @@ class Utils_RecordBrowser_Admin extends Module {
 		
 		$form->addElement('multiselect', 'blocked_fields', null, $this->getRecordset()->getHash());
 
-		$theme->assign('labels', array(
+		$theme->assign('labels', [
 			'and' => '<span class="joint">'.__('and').'</span>',
 			'or' => '<span class="joint">'.__('or').'</span>',
 			'caption' => $id?__('Edit permission rule'):__('Add permission rule'),
@@ -1040,26 +1091,26 @@ class Utils_RecordBrowser_Admin extends Module {
 			'add_clearance' => __('Add clearance'),
 			'add_or' => __('Add criteria (or)'),
 			'add_and' => __('Add criteria (and)')
- 		));
+ 		]);
 		$current_clearance = 0;
         $crits = [];
         $defaults = [];
         if ($id!==null && $this->getTab()!='__RECORDSETS__' && !preg_match('/,/',$this->getTab())) {
-			$row = DB::GetRow('SELECT * FROM '.$this->getTab().'_access AS acs WHERE id=%d', array($id));
+			$row = DB::GetRow('SELECT * FROM '.$this->getTab().'_access AS acs WHERE id=%d', [$id]);
 			
 			$defaults['action'] = $row['action'];
 
 			$crits = Utils_RecordBrowser_Crits::create(Utils_RecordBrowserCommon::unserialize_crits($row['crits']));
 		
 			$i = 0;
-			$tmp = DB::GetAll('SELECT * FROM '.$this->getTab().'_access_clearance AS acs WHERE rule_id=%d', array($id));
+			$tmp = DB::GetAll('SELECT * FROM '.$this->getTab().'_access_clearance AS acs WHERE rule_id=%d', [$id]);
 			foreach ($tmp as $t) {
 				$defaults['clearance_'.$i] = $t['clearance'];
 				$i++;
 			}
 			$current_clearance += $i-1;
 
-			$defaults['blocked_fields'] = DB::GetCol('SELECT block_field FROM '.$this->getTab().'_access_fields AS acs WHERE rule_id=%d', array($id));
+			$defaults['blocked_fields'] = DB::GetCol('SELECT block_field FROM '.$this->getTab().'_access_fields AS acs WHERE rule_id=%d', [$id]);
 		}
         $form->addElement('crits', 'qb_crits', __('Crits'), $this->getTab(), $crits);
 
@@ -1082,18 +1133,13 @@ class Utils_RecordBrowser_Admin extends Module {
 		
 			return Base_BoxCommon::pop_main();
 		}
-		
-		$labels_map = array(
-			'blocked_fields__from' => __('GRANT'),
-			'blocked_fields__to' => __('DENY')
-		);
-		eval_js('Utils_RecordBrowser.permissions.set_field_access_titles ('.json_encode($labels_map).')');
+
+		eval_js('Utils_RecordBrowser.permissions.set_field_access_titles ('.json_encode([
+				'blocked_fields__from' => __('GRANT'),
+				'blocked_fields__to' => __('DENY')
+		]).')');
 		eval_js('Utils_RecordBrowser.permissions.init_clearance('.$current_clearance.', '.$counts['clearance'].')');
 		eval_js('Utils_RecordBrowser.permissions.crits_initialized = true;');
-		
-// 		eval_js('utils_recordbrowser__set_field_access_titles ('.json_encode($labels_map).')');
-// 		eval_js('utils_recordbrowser__init_clearance('.$current_clearance.', '.$counts['clearance'].')');
-// 		eval_js('utils_recordbrowser__crits_initialized = true;');
 		
 		$form->assign_theme('form', $theme);
 		$theme->assign('counts', $counts);

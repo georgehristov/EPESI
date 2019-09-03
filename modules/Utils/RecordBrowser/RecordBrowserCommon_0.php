@@ -419,14 +419,40 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return DEMO_MODE?false:true;
     }
 	public static function admin_access_levels() {
-		return array(
-			'records'=>array('label'=>__('Manage Records'), 'values'=>array(0=>__('No access'), 1=>__('View'), 2=>__('Full')), 'default'=>1),
-			'fields'=>array('label'=>__('Manage Fields'), 'values'=>array(0=>__('No access'), 1=>__('View'), 2=>__('Full')), 'default'=>1),
-			'settings'=>array('label'=>__('Manage Settings'), 'values'=>array(0=>__('No access'), 1=>__('View'), 2=>__('Full')), 'default'=>1),
-			'addons'=>array('label'=>__('Manage Addons'), 'values'=>array(0=>__('No access'), 1=>__('View'), 2=>__('Full')), 'default'=>2),
-			'permissions'=>array('label'=>__('Permissions'), 'values'=>array(0=>__('No access'), 1=>__('View'), 2=>__('Full')), 'default'=>1),
-			'pattern'=>array('label'=>__('Clipboard Pattern'), 'values'=>array(0=>__('No access'), 1=>__('View'), 2=>__('Full')), 'default'=>2)
-		);
+		$values = Utils_RecordBrowser_Admin::get_access_levels_select_list();
+		
+		return [
+				'records' => [
+						'label' => __('Manage Records'),
+						'values' => $values,
+						'default' => 1
+				],
+				'fields' => [
+						'label' => __('Manage Fields'),
+						'values' => $values,
+						'default' => 1
+				],
+				'settings' => [
+						'label' => __('Manage Settings'),
+						'values' => $values,
+						'default' => 1
+				],
+				'addons' => [
+						'label' => __('Manage Addons'),
+						'values' => $values,
+						'default' => 2
+				],
+				'permissions' => [
+						'label' => __('Permissions'),
+						'values' => $values,
+						'default' => 1
+				],
+				'pattern' => [
+						'label' => __('Clipboard Pattern'),
+						'values' => $values,
+						'default' => 2
+				],
+		];
 	}
 	public static function get_field_id($f) {
 		return preg_replace('/[^|a-z0-9]/','_',strtolower($f));
@@ -2393,13 +2419,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 
     public static function clear_search_index($tab)
     {
-        $tab_id = DB::GetOne('SELECT id FROM recordbrowser_table_properties WHERE tab=%s',array($tab));
-        if ($tab_id) {
-            DB::Execute('DELETE FROM recordbrowser_search_index WHERE tab_id=%d',array($tab_id));
-            DB::Execute('UPDATE ' . $tab . '_data_1 SET indexed=0');
-            return true;
-        }
-        return false;
+        return Utils_RecordBrowser_Recordset::create($tab)->clearSearchIndex();
     }
     
     public static function indexer($limit=null,&$total=0) {
