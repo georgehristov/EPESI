@@ -34,6 +34,7 @@ class Base_CronInstall extends ModuleInstall {
 			array('name'=>Base_AdminInstall::module_name(),'version'=>0),
 			array('name'=>Base_RegionalSettingsInstall::module_name(),'version'=>0),
 			array('name'=>Utils_GenericBrowserInstall::module_name(),'version'=>0));
+			array('name'=>Utils_TooltipInstall::module_name(),'version'=>0));
 	}
 	
 	public static function info() {

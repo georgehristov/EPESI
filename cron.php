@@ -185,15 +185,7 @@ class EpesiJobReport extends \Cron\Report\JobReport {
 	public function log() {
 		$this->save();
 		
-		epesi_log(print_r([
-				'Cron' => $this->getJob()->getDescription(),
-				'Callback' => array_filter($this->getJob()->getCallback()?: []),
-				'Started' => date('Y-m-d H:m:i', $this->getStartTime()),
-				'Ended' => date('Y-m-d H:m:i', $this->getEndTime()),
-				'Successful' => $this->isSuccessful()? '<Yes>': '<No>',
-				'Output' => $this->getOutput()?: '<None>',
-				'Error' => $this->getError()?: '<None>',
-		], true), 'cron.log');
+		epesi_log($this->getSummary(), 'cron.log');
 	}
 	
 	public function save() {
@@ -202,10 +194,10 @@ class EpesiJobReport extends \Cron\Report\JobReport {
 		$pid = $job->isRunning()? $job->getProcess()->getPid(): 0;
 		
 		if ($this->read()) {
-			DB::Execute('UPDATE cron SET last=%d, running=%d WHERE token=%s', [$this->getStartTime(), $pid, $job->getToken()]);
+			DB::Execute('UPDATE cron SET last=%d, running=%d, log=%s WHERE token=%s', [$this->getStartTime(), $pid, $this->getSummary(), $job->getToken()]);
 		}
 		else {
-			DB::Execute('INSERT INTO cron (token, last, running, description) VALUES (%s,%d,%d,%s)', [$job->getToken(), $this->getStartTime(), $pid, $job->getDescription()]);
+			DB::Execute('INSERT INTO cron (token, last, running, description, log) VALUES (%s,%d,%d,%s,%s)', [$job->getToken(), $this->getStartTime(), $pid, $job->getDescription(), $this->getSummary()]);
 		}
 	}
 	
@@ -213,6 +205,18 @@ class EpesiJobReport extends \Cron\Report\JobReport {
 		if (!$force && $this->log) return $this->log;
 		
 		return $this->log = DB::GetRow('SELECT * FROM cron WHERE token=%s', [$this->getJob()->getToken()]);
+	}
+	
+	public function getSummary() {
+		return print_r([
+				'Cron' => $this->getJob()->getDescription(),
+				'Callback' => array_filter($this->getJob()->getCallback()?: []),
+				'Started' => date('Y-m-d H:m:i', $this->getStartTime()),
+				'Ended' => $this->getEndTime()? date('Y-m-d H:m:i', $this->getEndTime()): '<No>',
+				'Successful' => $this->isSuccessful()? '<Yes>': '<No>',
+				'Output' => $this->getOutput()?: '<None>',
+				'Error' => $this->getError()?: '<None>',
+		], true);
 	}
 }
 

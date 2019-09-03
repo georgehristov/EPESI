@@ -589,7 +589,7 @@ function install_base() {
 	if($ret===false)
 		die('Invalid SQL query - Setup module (modules table)');
 
-	$ret = DB::CreateTable('cron',"token C(32) KEY,last I NOTNULL, running I NOTNULL DEFAULT 0, description C(255)");
+	$ret = DB::CreateTable('cron',"token C(32) KEY,last I NOTNULL, running I NOTNULL DEFAULT 0, description C(255), log X");
 	if($ret===false)
 		die('Invalid SQL query - Setup cron (cron table)');
 

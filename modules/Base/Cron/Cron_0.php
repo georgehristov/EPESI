@@ -23,20 +23,24 @@ class Base_Cron extends Module {
         
         $gb->set_table_columns([
 				[
-						'name' => 'Description',
+						'name' => _M('Description'),
 						'width' => 65
 				],
 				[
-						'name' => 'Last Run',
+						'name' => _M('Last Run'),
 						'width' => 20
 				],
 				[
-						'name' => 'Running',
+						'name' => _M('Running'),
 						'width' => 15
-				]
+				],
+				[
+						'name' => _M('Log'),
+						'width' => 15
+				],
 		]);
         
-		$ret = DB::Execute('SELECT description,last,running FROM cron ORDER BY last DESC');
+		$ret = DB::Execute('SELECT * FROM cron ORDER BY last DESC');
 		while($row = $ret->FetchRow()) {
 			$running = $row['running']? (bool) posix_getpgid($row['running']): false;
 			
@@ -45,7 +49,8 @@ class Base_Cron extends Module {
 			$gb_row->add_data_array([
 					$row['description']?: '???',
 					$row['last']? Base_RegionalSettingsCommon::time2reg($row['last']): '---',
-					$running?'<span style="color:red">'.__('Yes (pid: %d)', [$row['running']]).'</span>':'<span style="color:green">'.__('No').'</span>'
+					$running?'<span style="color:red">'.__('Yes (pid: %d)', [$row['running']]).'</span>':'<span style="color:green">'.__('No').'</span>',
+					$row['log']? '<a '.Utils_TooltipCommon::tooltip_leightbox_mode().' '.Utils_TooltipCommon::open_tag_attrs('<div style="resize:both;text-align:left;"><pre>' . htmlentities($row['log']) . '</pre></div>', false).'>' . __('View') . '</a>': ''
 			]);
 
 			if (!$running || !OS_UNIX) continue;
