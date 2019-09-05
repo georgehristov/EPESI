@@ -162,7 +162,8 @@ class EpesiCron {
 						'description' => $func,
 						'schedule' => 0,
 						'func' => $func,
-						'args' => []
+						'args' => [],
+						'reference' => $func
 				], is_array($opts)? $opts: [
 						'schedule' => $opts,
 				]);
@@ -194,10 +195,10 @@ class EpesiJobReport extends \Cron\Report\JobReport {
 		$pid = $job->isRunning()? $job->getProcess()->getPid(): 0;
 		
 		if ($this->read()) {
-			DB::Execute('UPDATE cron SET last=%d, running=%d, log=%s WHERE token=%s', [$this->getStartTime(), $pid, $this->getSummary(), $job->getToken()]);
+			DB::Execute('UPDATE cron SET last=%d, running=%d, log=%s, reference=%s WHERE token=%s', [$this->getStartTime(), $pid, $this->getSummary(), $job->getReference(), $job->getToken()]);
 		}
 		else {
-			DB::Execute('INSERT INTO cron (token, last, running, description, log) VALUES (%s,%d,%d,%s,%s)', [$job->getToken(), $this->getStartTime(), $pid, $job->getDescription(), $this->getSummary()]);
+			DB::Execute('INSERT INTO cron (token, last, running, description, log, reference) VALUES (%s,%d,%d,%s,%s)', [$job->getToken(), $this->getStartTime(), $pid, $job->getDescription(), $this->getSummary(), $job->getReference()]);
 		}
 	}
 	
@@ -225,6 +226,7 @@ class EpesiJob extends \Cron\Job\PhpJob {
 	protected $log;
 	protected $description;
 	protected $callback;
+	protected $reference;
 	
 	public static function create() {
 		return new static();
@@ -248,6 +250,7 @@ class EpesiJob extends \Cron\Job\PhpJob {
 	public function setOptions($options) {
 		$this->setDescription($options['description']);		
 		$this->setCallback($options['func'], $options['args']);
+		$this->setReference($options['reference']);
 		
 		$schedule = is_numeric($options['schedule'])? "*/$options[schedule] * * * * *": $options['schedule'];
 		
@@ -300,6 +303,16 @@ class EpesiJob extends \Cron\Job\PhpJob {
 	
 	public function getToken() {
 		return $this->token;
+	}
+	
+	public function setReference($reference) {
+		$this->reference = is_array($reference)? implode('::', $reference): $reference;
+
+		return $this;
+	}
+	
+	public function getReference() {
+		return $this->reference;
 	}
 	
 	public function readPid() {
