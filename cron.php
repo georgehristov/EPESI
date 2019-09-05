@@ -64,7 +64,7 @@ require_once('include.php');
 
 if (file_exists(DATA_DIR . '/maintenance_mode.php')) die('Cron does not run in maintenance mode.');
 
-set_time_limit(6 * 60 * 60);
+set_time_limit(0);
 ini_set('memory_limit', '512M');
 
 ModuleManager::load_modules();
@@ -211,8 +211,8 @@ class EpesiJobReport extends \Cron\Report\JobReport {
 		return print_r([
 				'Cron' => $this->getJob()->getDescription(),
 				'Callback' => array_filter($this->getJob()->getCallback()?: []),
-				'Started' => date('Y-m-d H:m:i', $this->getStartTime()),
-				'Ended' => $this->getEndTime()? date('Y-m-d H:m:i', $this->getEndTime()): '<No>',
+				'Started' => date('Y-m-d H:i:s', $this->getStartTime()),
+				'Ended' => $this->getEndTime()? date('Y-m-d H:i:s', $this->getEndTime()): '<No>',
 				'Successful' => $this->isSuccessful()? '<Yes>': '<No>',
 				'Output' => $this->getOutput()?: '<None>',
 				'Error' => $this->getError()?: '<None>',
