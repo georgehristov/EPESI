@@ -410,7 +410,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return $ret;
     }
     public static function is_active($tab, $id) {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->isActive();
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->isActive();
     }
     public static function admin_caption() {
 		return array('label'=>__('Record Browser'), 'section'=>__('Data'));
@@ -970,7 +970,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	 * @return integer
 	 */
 	public static function new_record($recordset, $values = []) {
-		return Utils_RecordBrowser_Recordset_Record::create($recordset, $values)->add()->getId();
+		return Utils_RecordBrowser_Recordset_Record::create($recordset, $values)->insert()->getId();
     }
 
     public static function new_record_history($tab,$id,$old_value) {
@@ -981,10 +981,10 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return $edit_id;
     }
 
-    public static function update_record($tab, $id, $values, $all_fields = false, $date = null, $dont_notify = false) {
+    public static function update_record($tab, $id, $values, $allFields = false, $onDate = null, $dontNotify = false) {
     	$values[':id'] = $id;
 
-    	return Utils_RecordBrowser_Recordset_Record::create($tab, $values)->update($all_fields, $date, $dont_notify)? true: false;
+    	return Utils_RecordBrowser_Recordset_Record::create($tab, $values)->update(compact('allFields', 'onDate', 'dontNotify'))? true: false;
     }
     
     public static function add_recent_entry($tab, $user_id ,$id){
@@ -1045,7 +1045,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      * @return int records count
      */
     public static function get_records_count( $tab, $crits = null, $admin = false) {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecordsCount($crits, $admin);
+    	return Utils_RecordBrowser_Recordset::create($tab)->count($crits, compact('admin'));
     }
     
     public static function get_next_and_prev_record( $tab, $crits, $order, $id, $last = null) {
@@ -1086,7 +1086,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     public static function get_records( $tab, $crits = array(), $cols = array(), $order = array(), $limit = array(), $admin = false) {
         if (!$tab) return [];
 
-        $records = Utils_RecordBrowser_Recordset::create($tab)->getRecords($crits, $order, $limit, $admin);
+        $records = Utils_RecordBrowser_Recordset::create($tab)->find($crits, compact('order', 'limit', 'admin'));
         
         array_walk($records, function(& $record){
         	$record = $record->toArray();
@@ -1475,16 +1475,16 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      * 
      * @param string | Utils_RecordBrowser_Recordset $tab
      * @param integer | array $id
-     * @param boolean $htmlspecialchars
+     * @param boolean $asHtml
      * @return array
      */
-    public static function get_record($tab, $id, $htmlspecialchars=true) {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id, $htmlspecialchars)->toArray();
+    public static function get_record($tab, $id, $asHtml = true) {
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id, compact('asHtml'))->toArray();
     }
 
-    public static function get_record_respecting_access($tab, $id, $access_mode = 'view', $htmlspecialchars = true)
+    public static function get_record_respecting_access($tab, $id, $access_mode = 'view', $asHtml = true)
     {
-        $record = self::get_record($tab, $id, $htmlspecialchars);
+        $record = self::get_record($tab, $id, $asHtml);
         return self::filter_record_by_access($tab, $record, $access_mode);
     }
 
@@ -1517,7 +1517,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function set_active($tab, $id, $state)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->setActive($state);
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->setActive($state);
     }
 
     /**
@@ -1531,7 +1531,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_record($tab, $id, $permanent = false)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->delete($permanent);
+    	return Utils_RecordBrowser_Recordset::create($tab)->deleteOne(compact('permanent'));
     }
 
     /**
@@ -1544,7 +1544,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_record_history($tab, $id)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->clearHistory();
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->clearHistory();
     }
 
     /**
@@ -1557,7 +1557,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_from_favorite($tab, $id)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->deleteFavourite();
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->deleteFavourite();
     }
 
     /**
@@ -1570,7 +1570,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_from_recent($tab, $id)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->deleteRecent();
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->deleteRecent();
     }
 
     /**
@@ -1670,14 +1670,14 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 		return Libs_LeightboxCommon::get_open_href('actionbar_rb_new_record');
 	}
     
-    public static function get_record_href_array($tab, $id, $action='view'){
+    public static function get_record_href_array($tab, $id, $action='view') {
     	if (is_string($id)) return Utils_RecordBrowser_Recordset_Record::createHrefArray($tab, $id, $action);
     	
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->getHrefArray($action);
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->getHrefArray($action);
     }
     
-    public static function create_record_href($tab, $id, $action='view',$more=array()){
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->createHref($action, $more);
+    public static function create_record_href($tab, $id, $action='view', $urlOptions = []) {
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->createHref($action, $urlOptions);
     }
     
     /**
@@ -1691,7 +1691,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function record_link_open_tag_r($tab, $record, $nolink=false, $action='view', $more=array())
     {
-    	$link = Utils_RecordBrowser_Recordset::create($tab)->getRecord($record)->createLinkedText('__TEXT__', $nolink, false, $more);
+    	$link = Utils_RecordBrowser_Recordset::create($tab)->findOne($record)->createLinkedText('__TEXT__', $nolink, false, $more);
     	
     	$tags = explode('__TEXT__', $link);
     	
@@ -1714,20 +1714,20 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     public static function record_link_close_tag(){
         return self::$del_or_a;
     }
-	public static function create_linked_label($tab, $cols, $id, $nolink=false, $tooltip=false, $more=array()){
-		return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->createLinkedLabel($cols, $nolink, $tooltip, $more);
+    public static function create_linked_label($tab, $cols, $id, $nolink=false, $tooltip=false, $urlOptions=array()){
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->createLinkedLabel($cols, compact('nolink', 'tooltip', 'urlOptions'));
     }
-	public static function create_linked_text($text, $tab, $id, $nolink=false, $tooltip=true, $more=array()){
-		return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->createLinkedText($text, $nolink, $tooltip, $more);
+    public static function create_linked_text($text, $tab, $id, $nolink=false, $tooltip=true, $urlOptions=array()){
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->createLinkedText($text, compact('nolink', 'tooltip', 'urlOptions'));
     }
     public static function create_record_tooltip($text, $tab, $id, $nolink=false, $tooltip=true){
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->createTooltip($text, $nolink, $tooltip);
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->createTooltip($text, compact('nolink', 'tooltip'));
     }
-    public static function get_record_vals($tab, $record, $nolink=false, $fields = array(), $silent = true){
-    	return Utils_RecordBrowser_Recordset::create($tab)->createRecord($record)->getDisplayValues($nolink, $fields, $silent);
+    public static function get_record_vals($tab, $record, $nolink=false, $fields = array(), $quiet = true){
+    	return Utils_RecordBrowser_Recordset::create($tab)->entry($record)->getDisplayValues(compact('nolink', 'fields', 'quiet'));
     }
-    public static function create_default_linked_label($tab, $id, $nolink=false, $table_name=true, $detailed_tooltip = true){
-    	return Utils_RecordBrowser_Recordset::create($tab)->createRecord($id)->createDefaultLinkedLabel($nolink, $table_name, $detailed_tooltip);
+    public static function create_default_linked_label($tab, $id, $nolink=false, $includeTabCaption=true, $tooltip = true, $urlOptions=[]){
+    	return Utils_RecordBrowser_Recordset::create($tab)->entry($id)->createDefaultLinkedLabel(compact('nolink', 'tooltip', 'includeTabCaption','urlOptions'));
     }
 
     public static function create_default_record_tooltip_ajax($string, $tab, $id, $force = false)
@@ -1741,7 +1741,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 
     public static function get_record_tooltip_data($tab, $record_id)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getRecord($record_id)->getTooltipData();
+    	return Utils_RecordBrowser_Recordset::create($tab)->findOne($record_id)->getTooltipData();
     }
     
     public static function default_record_tooltip($tab, $record_id)
@@ -1750,10 +1750,10 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
         return Utils_TooltipCommon::format_info_tooltip($data);
     }
     public static function display_linked_field_label($record, $nolink=false, $desc=null, $tab = ''){
-    	return Utils_RecordBrowser_Recordset::create($tab)->createRecord($record)->createLinkedLabel($desc['id'], $nolink);
+    	return Utils_RecordBrowser_Recordset::create($tab)->entry($record)->createLinkedLabel($desc['id'], $nolink);
     }
     public static function create_linked_label_r($tab, $cols, $record, $nolink=false, $tooltip=false){
-    	return Utils_RecordBrowser_Recordset::create($tab)->createRecord($record)->createLinkedLabel($cols, $nolink, $tooltip);
+    	return Utils_RecordBrowser_Recordset::create($tab)->entry($record)->createLinkedLabel($cols, $nolink, $tooltip);
     }
     public static function record_bbcode($tab, $fields, $text, $record_id, $opt, $tag = null) {
         if (!is_numeric($record_id)) {
@@ -1863,7 +1863,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 	 *	@param Revision ID - RB will backtrace all edits on that record down-to and including edit with this ID
 	 */
     public static function get_record_revision($tab, $id, $revisionId) {
-		return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->getRevision($revisionId);
+		return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->getRevision($revisionId);
 	}
 	
 	public static function get_edit_details($tab, $rid, $edit_id,$details=true) {
@@ -2284,12 +2284,12 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
  * Function to manipulate clipboard pattern
  * @param string $tab recordbrowser table name
  * @param string|null $pattern pattern, or when it's null the pattern stays the same, only enable state changes
- * @param bool $enabled new enabled state of clipboard pattern
+ * @param array $enabled new enabled state of clipboard pattern
  * @param bool $force make it true to allow any changes or overwrite when clipboard pattern exist
  * @return bool true if any changes were made, false otherwise
  */
     public static function set_clipboard_pattern($tab, $pattern, $enabled = true, $force = false) {
-    	return Utils_RecordBrowser_Recordset::create($tab)->setClipboardPattern($pattern, $enabled, $force);
+    	return Utils_RecordBrowser_Recordset::create($tab)->setClipboardPattern($pattern, compact('enabled', 'force'));
     }
 
 /**
@@ -2299,7 +2299,9 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
  * @return string|array string by default, array when with_state=true
  */
     public static function get_clipboard_pattern($tab, $with_state = false) {
-    	return Utils_RecordBrowser_Recordset::create($tab)->getClipboardPattern();
+    	$recordset = Utils_RecordBrowser_Recordset::create($tab);
+    	
+    	return $with_state? $recordset->getClipboardPatternEntry(): $recordset->getClipboardPattern();
     }
     
     public static function replace_clipboard_pattern($text, $data, $cleanupPatterns = true) {
@@ -2843,11 +2845,11 @@ Utils_RecordBrowser_Recordset_Field::register([
 		Utils_RecordBrowser_Recordset_Field_Special_Active::class,
 		Utils_RecordBrowser_Recordset_Field_Special_CreatedBy::class,
 		Utils_RecordBrowser_Recordset_Field_Special_CreatedOn::class,
-// 		Utils_RecordBrowser_Recordset_Field_Special_EditedOn::class,
+		Utils_RecordBrowser_Recordset_Field_Special_EditedOn::class,
 // 		Utils_RecordBrowser_Recordset_Field_Special_VisitedOn::class,
-// 		Utils_RecordBrowser_Recordset_Field_Special_Fav::class,
-// 		Utils_RecordBrowser_Recordset_Field_Special_Sub::class,
-// 		Utils_RecordBrowser_Recordset_Field_Special_Recent::class,
+		Utils_RecordBrowser_Recordset_Field_Special_Fav::class,
+		Utils_RecordBrowser_Recordset_Field_Special_Sub::class,
+		Utils_RecordBrowser_Recordset_Field_Special_Recent::class,
 		Utils_RecordBrowser_Recordset_Field_Text::class,
 		Utils_RecordBrowser_Recordset_Field_LongText::class,
 		Utils_RecordBrowser_Recordset_Field_Select::class,
@@ -2865,6 +2867,12 @@ Utils_RecordBrowser_Recordset_Field::register([
 		Utils_RecordBrowser_Recordset_Field_Autonumber::class,
 		Utils_RecordBrowser_Recordset_Field_Currency::class,
 		Utils_RecordBrowser_Recordset_Field_Hidden::class,
+]);
+
+Utils_RecordBrowser_BrowseMode_Controller::register([
+		Utils_RecordBrowser_BrowseMode_Favourites::class,
+		Utils_RecordBrowser_BrowseMode_Watchdog::class,
+		Utils_RecordBrowser_BrowseMode_Recent::class
 ]);
 
 load_js(__DIR__ . '/js/default.js');

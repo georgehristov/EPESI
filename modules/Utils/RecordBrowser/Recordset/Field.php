@@ -534,15 +534,15 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	}
 	
 	final public function callQFfieldCallback($form, $mode, $default, $rb_obj) {
-		$callback = is_callable($this->QFfield_callback)? $this->QFfield_callback: [$this, 'defaultQFfieldCallback'];
+		$callback = is_callable($this->QFfield_callback)? $this->QFfield_callback: [static::class, 'defaultQFfieldCallback'];
 		
 		if (!is_callable($callback)) return;
 
 		$callback($form, $this->getId(), $this->getQFfieldLabel(), $mode, $default, $this, $rb_obj, []);
 	}
 	
-	public function getDisplayValue($record, $nolink=false) {
-		return $this->display($record, $nolink);
+	public function getDisplayValue($record, $options = []) {
+		return $this->display($record, $options);
 	}
 	
 	final public function getValue($record) {
@@ -555,7 +555,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		} elseif ($value === '' || $value === null) {
 			$value = __('empty');
 		} else {
-			$value = $this->display([$this->getArrayId() => $value], true);
+			$value = $this->display([$this->getArrayId() => $value], ['nolink' => true]);
 		}
 
 		return $value;
@@ -566,8 +566,12 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	 * @param boolean $nolink
 	 * @return string
 	 *  */
-	final public function display($record, $nolink=false) {
+	final public function display($record, $options = []) {
 		static $recurrence = [];
+		
+		$options = array_merge([
+				'nolink' => false,
+		], $options);
 
 		if(!isset($record['id'])) $record['id'] = null;
 		if (!isset($record[$this->getArrayId()])) trigger_error($this['id'].' - unknown field for record '.print_r($record, true), E_USER_ERROR);
@@ -581,9 +585,23 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 			$recurrence[$function_call_id] = true;
 		}
 		
-		$callback = is_callable($this->display_callback)? $this->display_callback: [$this, 'defaultDisplayCallback'];
+		$callback = is_callable($this->display_callback)? $this->display_callback: [static::class, 'defaultDisplayCallback'];
 		
-		$ret = $callback($record, $nolink, $this, $this->getTab());
+// 		$args = [$record, $this, $options];
+		
+// 		//--> backward compatibility
+// 		$reflection = new ReflectionMethod(is_array($callback)? implode('::', $callback): $callback);
+// 		if ($reflection->getNumberOfParameters() > 2) {
+			$args = [
+					$record, 
+					$options['nolink'], 
+					$this, 
+					$this->getTab()
+			];
+// 		}
+		//<-- backward compatibility
+		
+		$ret = call_user_func_array($callback, $args);
 		
 		unset($recurrence[$function_call_id]);
 
@@ -647,14 +665,19 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return $this;
 	}
 
-	final public static function getGridCell($record, $nolink, $desc, $admin) {
-		$fieldId = $desc['field'];
+	final public static function getGridCell($record, $column, $options = []) {
+		$options = array_merge([
+				'nolink' => false,
+				'admin' => false
+		], $options);
+		
+		$fieldId = $column['field'];
 		
 		if (!$field = $record->getRecordset()->getField($fieldId)) return '&nbsp;';
 		
-		if (!$field->getAccess($record, $admin)) return false;
+		if (!$field->getAccess($record, $options['admin'])) return false;
 		
-		$value = $record->getValue($fieldId, $nolink);
+		$value = $record->getValue($fieldId, $options['nolink']);
 		
 		if (!strip_tags($value)) $value .= '&nbsp;';
 		
@@ -668,10 +691,10 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		$table = '';
 		$ed_icon = '';
 		$attrs = '';
-		if ($desc['gridEdit']?? false) {
+		if ($column['gridEdit']?? false) {
 			$table = '<table class="Utils_RecordBrowser__grid_table" style="width:100%" cellpadding="0" cellspacing="0" border="0"><tr><td id="grid_form_field_'.$fieldId.'_'.$record['id'].'" style="display:none;">Loading...</td><td id="grid_value_field_'.$fieldId.'_'.$record['id'].'">';
 			$ed_icon = '</td><td style="min-width:18px;width:18px;padding:0px;margin:0px;">'.
-					'<span id="grid_edit_'.$fieldId.'_'.$record['id'].'" style="float:right;display:none;"><a href="javascript:void(0);" onclick="grid_enable_field_edit(\''.$fieldId.'\','.$record['id'].',\''.$record->getTab().'\',\''.$desc['form_name'].'\');"><img border="0" src="'.Base_ThemeCommon::get_template_file(Utils_GenericBrowser::module_name(), 'edit.png').'"></a></span>'.
+					'<span id="grid_edit_'.$fieldId.'_'.$record['id'].'" style="float:right;display:none;"><a href="javascript:void(0);" onclick="grid_enable_field_edit(\''.$fieldId.'\','.$record['id'].',\''.$record->getTab().'\',\''.$column['form_name'].'\');"><img border="0" src="'.Base_ThemeCommon::get_template_file(Utils_GenericBrowser::module_name(), 'edit.png').'"></a></span>'.
 					'<span id="grid_save_'.$fieldId.'_'.$record['id'].'" style="float:right;display:none;"><a href="javascript:void(0);" onclick="grid_submit_field(\''.$fieldId.'\','.$record['id'].',\''.$record->getTab().'\');"><img border="0" src="'.Base_ThemeCommon::get_template_file(Utils_RecordBrowser::module_name(), 'save_grid.png').'"></a></span>'.
 					'</td></tr></table>';
 			

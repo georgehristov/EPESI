@@ -58,6 +58,24 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedOn extends Utils_Record
 		return $values;
 	}
 	
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+		
+		$field = $this->getQueryId();
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+
+		$sql = "$field $operator %T";
+		if (stripos($operator, '!') !== false) {
+			$sql = "NOT ($sql)";
+		}
+		
+		return $this->getRecordset()->createQuery($sql, [Base_RegionalSettingsCommon::reg2time($value, false)]);
+	}
+	
 	public function queryBuilderFilters($opts = []) {
 		return [
 				[

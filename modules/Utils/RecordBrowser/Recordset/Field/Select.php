@@ -488,7 +488,7 @@ class Utils_RecordBrowser_Recordset_Field_Select extends Utils_RecordBrowser_Rec
 				$checkCrits = Utils_RecordBrowser_Recordset_Query_Crits_Basic::create($subfield, $crits->getValue(), $crits->getOperator());
 
 				foreach (is_array($values)? $values: [$values] as $value) {
-					$issues = Utils_RecordBrowser_Recordset::create($tab2)->getRecord($value)->validate($checkCrits);
+					$issues = Utils_RecordBrowser_Recordset::create($tab2)->findOne($value)->validate($checkCrits);
 					
 					if (!$issues) return true;
 				}

@@ -32,7 +32,8 @@ class Utils_RecordBrowser extends Module {
 	private $crits = [];
 	private $navigationExecuted = false;
 	private $searchCritsCallback;
-	
+	private $action = 'browse';
+	private $browseModeController;
 	
 	
 	
@@ -59,7 +60,7 @@ class Utils_RecordBrowser extends Module {
 	private $hide_tab = array();
     private $jump_to_new_record = false;
     
-    public $action = 'Browsing'; // _M('Browsing');
+    
     
     public static $tab_param = '';
     public static $clone_result = null;
@@ -80,13 +81,11 @@ class Utils_RecordBrowser extends Module {
 
 	private $disabled = [
 			'search' => false,
-			'browse_mode' => false,
-			'watchdog' => false,
+			'browse_mode' => [],			
 			'quickjump' => false,
 			'filters' => false,
 			'headline' => false,
 			'actions' => false,
-			'favourites' => false,
 			'pdf' => false,
 			'export' => false,
 			'pagination' => false,
@@ -338,10 +337,20 @@ class Utils_RecordBrowser extends Module {
     }
 
     public function disable_search(){$this->disabled['search'] = true;}
+    
     public function disable_browse_mode_switch(){$this->disabled['browse_mode'] = true;}
-    public function disable_watchdog(){$this->disabled['watchdog'] = true;}
-    public function disable_fav(){$this->disabled['favourites'] = true;}
-    public function disable_favourites(){$this->disabled['favourites'] = true;}
+
+	public function disable_browse_mode($mode) {
+		if ($this->disabled['browse_mode'] === true) return;
+		
+		$this->disabled['browse_mode'] = $this->disabled['browse_mode']?: [];
+		
+		$this->disabled['browse_mode'][$mode] = true;
+	}
+    
+    public function disable_watchdog(){$this->disable_browse_mode('watchdog');}
+    public function disable_fav(){$this->disable_browse_mode('favourites');}
+    public function disable_favourites(){$this->disable_browse_mode('favourites');}
     public function disable_filters(){$this->disabled['filters'] = true;}
     public function disable_quickjump(){$this->disabled['quickjump'] = true;}
     public function disable_headline() {$this->disabled['headline'] = true;}
@@ -420,7 +429,6 @@ class Utils_RecordBrowser extends Module {
         //If Caption or icon not specified assign default values
         $this->caption = $this->getRecordset()->getCaption();
         $this->icon = $this->getRecordset()->getIcon();
-        $this->recent = $this->getRecordset()->getProperty('recent');
         $this->full_history = $this->getRecordset()->getProperty('full_history');
     }
 
@@ -467,14 +475,14 @@ class Utils_RecordBrowser extends Module {
 
         $this->crits = Utils_RecordBrowserCommon::merge_crits($this->crits, $crits);
         
-        ob_start();
-        $this->show_data($this->crits, $cols, array_merge($def_order, $this->default_order));
-        $table = ob_get_clean();
-
         $theme = $this->init_module(Base_Theme::module_name());
         $theme->assign('filters', $filters);
         
         $this->addBrowseModeSelector($theme);      
+        
+        ob_start();
+        $this->show_data($this->crits, $cols, array_merge($def_order, $this->default_order));
+        $table = ob_get_clean();
 
         $theme->assign('table', $table);
         
@@ -485,43 +493,65 @@ class Utils_RecordBrowser extends Module {
     }
     
     protected function addBrowseModeSelector($theme) {
-    	$opts = ['all'=>__('All')];
-    	if ($this->recent > 0) $opts['recent'] = __('Recent');
-    	if ($this->modeEnabled('favorites')) $opts['favorites'] = __('Favorites');
-    	if ($this->modeEnabled('watchdog')) $opts['watchdog'] = __('Watched');
-    	
+    	if (! $opts = Utils_RecordBrowser_BrowseMode_Controller::getSelectList($this->getRecordset(), $this->disabled['browse_mode'])) {
+    		return;
+    	}
+
     	if ($this->getGenericBrowser()->show_all()) {
-    		$this->set_module_variable('browse_mode', 'all');
+    		$this->set_module_variable('browse_mode', '__ALL__');
     	}
     	
-    	if (count($opts) > 1 ) {
-    		if ($this->disabled['browse_mode'])
-    			$this->browse_mode='all';
-    			else {
-    				$this->browse_mode = $this->get_module_variable('browse_mode', Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(),$this->getTab().'_default_view'));
-    				if (!$this->browse_mode) $this->browse_mode='all';
-    				if (($this->browse_mode=='recent' && $this->recent==0) || ($this->browse_mode=='favorites' && !$this->modeEnabled('favorites'))) $this->set_module_variable('browse_mode', $this->browse_mode='all');
-    				$form = $this->init_module(Libs_QuickForm::module_name());
-    				$form->addElement('select', 'browse_mode', '', $opts, array('onchange'=>$form->get_submit_form_js()));
-    				$form->setDefaults(array('browse_mode'=>$this->browse_mode));
-    				if ($form->validate()) {
-    					$vals = $form->exportValues();
-    					if (isset($opts[$vals['browse_mode']])) {
-    						$this->switch_view($vals['browse_mode']);
-    						location(array());
-    						return;
-    					}
-    				}
-    				$form->assign_theme('form', $theme);
-    			}
+    	if (! $this->disabled['search'] && $this->getGenericBrowser()->get_module_variable('search')) {
+   			$this->set_module_variable('browse_mode', '__ALL__');
     	}
+
+    	$browse_mode = $this->getBrowseModeController()->getKey();
+
+		$form = $this->init_module(Libs_QuickForm::module_name());
+		$form->addElement('select', 'browse_mode', '', $opts, [
+				'onchange' => $form->get_submit_form_js()
+		]);
+		$form->setDefaults(compact('browse_mode'));
+		
+		if ($form->validate()) {
+			$vals = $form->exportValues();
+			if (isset($opts[$vals['browse_mode']])) {
+				$this->setBrowseMode($vals['browse_mode']);
+				location([]);
+				return;
+			}
+		}
+		
+		$form->assign_theme('form', $theme);
+	}
+    
+	public function getBrowseModeController() {
+		if ($this->browseModeController) return $this->browseModeController;
+		
+		$key = $this->get_module_variable('browse_mode', $this->getDefaultBrowseMode());
+		
+		return $this->browseModeController = Utils_RecordBrowser_BrowseMode_Controller::getController($key);
+	}
+	
+	/**
+	 * @deprecated use setBrowseMode
+	 */
+	public function switch_view($browseMode) {
+		return $this->setBrowseMode($browseMode);
+	}
+	
+	public function setBrowseMode($browseMode) {
+		$this->setDefaultBrowseMode($browseMode);
+        $this->changed_view = true;
+        $this->set_module_variable('browse_mode', $browseMode);
     }
     
-    public function switch_view($mode){
-        Base_User_SettingsCommon::save(Utils_RecordBrowser::module_name(),$this->getTab().'_default_view',$mode);
-        $this->browse_mode = $mode;
-        $this->changed_view = true;
-        $this->set_module_variable('browse_mode', $mode);
+    public function getDefaultBrowseMode() {
+    	return Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(), $this->getTab() . '_default_view')?: '__ALL__';
+    }
+    
+    public function setDefaultBrowseMode($browseMode) {
+    	Base_User_SettingsCommon::save(Utils_RecordBrowser::module_name(), $this->getTab() . '_default_view', $browseMode);
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -546,85 +576,44 @@ class Utils_RecordBrowser extends Module {
     	Base_BoxCommon::pop_main();
     }
 
-    public function displayRecordsTable($crits = [], $order = [], $limit = null, $admin = false) {
-    	$this->help('RecordBrowser','main');
+    public function displayTable($crits = [], $options = []) {
+    	$this->help('RecordBrowser', 'main');
     	
     	if ($this->check_for_jump()) return;
     	
-    	if ($this->getRecordset()->getUserAccess('browse') === false) {
-    		print(__('You are not authorised to browse this data.'));
+    	$this->setAction('browse');
+    	
+    	$options = array_merge([
+    			'order' => [],
+    			'limit' => null,
+    			'admin' => false,
+    			'nolink' => $this->getNolink(),
+    	], $options);
+    	
+    	if (! $this->getRecordset()->getUserAccess('browse', $options['admin'])) {
+    		print(__('You are not authorised to access this data.'));
     		return;
     	}
-    	
-    	$this->action = 'Browse';
-    	if (! Acl::i_am_admin() && $admin) {
-    		print(__('You don\'t have permission to access this data.'));
-    	}
-    	
-    	$gb = $this->getGenericBrowser();
-    	
-    	if ($this->isGridEditEnabled()) load_js('modules/Utils/RecordBrowser/grid.js');
-    	
-    	//callback to set specifics of Generic Browser
-//     	call_user_func($callback, $gb);
-    	
-		if (! $this->disabled['search'] && $gb->get_module_variable('search', '')) {
-			if ($this->get_module_variable('browse_mode') != 'all') {
-				$this->set_module_variable('browse_mode', 'all');
-				location([]);
-				return;
-			}
-		}
     	
     	if (! $tableColumns = $this->getTableColumns()) {
     		print('Invalid view, no columns to display');
     		return;
     	}
     	
-    	$gb->set_table_columns( $tableColumns );
+    	//TODO: Georgi Hristov - move this script to default script
+    	if ($this->isGridEditEnabled()) load_js('modules/Utils/RecordBrowser/grid.js');
     	
-    	$tableFields = $this->getTableFields();
+    	$gb = $this->getGenericBrowser();
     	
-    	$crits = Utils_RecordBrowser_Crits::and($crits, $this->getSearchCrits());
     	
-    	$clean_order = array();
-    	foreach ($order as $k => $v) {
-    		if ($k[0] == ':') {
-    			$clean_order[$k] = $v;
-    			continue;
-    		}
-    		
-    		if (! $field = $tableFields[$k]?? []) continue;
-    		
-    		if (!isset($k, $query_cols)) continue;
-    		if (isset($this->more_table_properties[$k]) && isset($this->more_table_properties[$k]['name'])) {
-    			$key = $this->more_table_properties[$k]['name'];
-    		} else {
-    			$key = isset($hash[$k]) ? $hash[$k] : $k;
-    			$key = _V($this->table_rows[$key]['name']);
-    		}
-    		
-    		$clean_order[$key] = $v;
-    	}
-    	
-    	if ($this->browse_mode != 'recent')
-    		$gb->set_default_order($clean_order, $this->changed_view);
-    	
-    	$order = $gb->get_order();
-    	//search
-    	//quickjump
+    	//callback to set specifics of Generic Browser
+    	//     	call_user_func($callback, $gb);
+
     	//buttons
+    	//browse modes
     	
-    	$this->setRecordsCount($this->getRecordset()->getRecordsCount($crits, $admin));
+    	$gb->set_table_columns( $tableColumns );    	
     	
-    	$this->setRecordListOptions($crits, $order, $limit, $admin);
-    	
-    	if ($limit === null && !$this->disabled['pagination']) {
-    		$limit = $gb->get_limit($this->getRecordsCount());
-    	}
-    	
-    	$records = $this->getTableRecords($crits, $order, $limit, $admin);
-    	    	
     	$gb->set_custom_label($this->getTableCustomLabel());
 
     	$columnAccess = array_fill(0, count($tableColumns), false);
@@ -632,7 +621,7 @@ class Utils_RecordBrowser extends Module {
     	/**
     	 * @var Utils_RecordBrowser_Recordset_Record $record
     	 */
-    	foreach ($records as $record) {
+    	foreach ($this->getTableRecords($crits, $options) as $record) {
     		$record->process('browse');
     		
     		self::$access_override['id'] = $record['id'];
@@ -640,7 +629,7 @@ class Utils_RecordBrowser extends Module {
     		$rowData = [];
 
     		foreach($tableColumns as $k => $desc) {
-    			$value = call_user_func_array($desc['cell_callback'], [$record, $this->getNolink(), $desc, $admin]);
+    			$value = call_user_func_array($desc['cell_callback'], [$record, $desc, $options]);
 
     			if ($value === false) {
     				$rowData[] = '';
@@ -649,9 +638,9 @@ class Utils_RecordBrowser extends Module {
     			
     			$columnAccess[$k] = true;
     			
-    			$rowData[] = $value;
+    			$value = is_array($value)? $value: compact('value');
     			
-    			if (!$this->getRowsExpandable()) {
+    			if (! $this->getRowsExpandable()) {
     				$value['overflow_box'] = false;
     			}
     			
@@ -659,18 +648,20 @@ class Utils_RecordBrowser extends Module {
     				$value['attrs'] = ($value['attrs']?? '') . ' style="border:1px solid black;"';
     				$value['value'] = '&nbsp;' . $value['value'] . '&nbsp;';
     			}
+    			
+    			$rowData[] = $value;
     		}
     		
     		$gb_row = $gb->get_new_row();
     		
     		$gb_row->add_data_array($rowData);
     		
-    		$this->addTableRowActions($record, $gb_row, $admin);
+    		$this->addTableRowActions($record, $gb_row, $options);
     	}
     	
     	$this->addInTableRow();
 
-    	if (!$this->addInTableEnabled() && $this->getRecordsCount()) {
+    	if (! $this->addInTableEnabled() && $this->getRecordsCount()) {
     		foreach ($columnAccess as $k => $access) {
     			if ($access) continue;
     			
@@ -691,22 +682,63 @@ class Utils_RecordBrowser extends Module {
     	$this->display_module($gb, $args);
     }
     
-    protected function setRecordListOptions($crits, $order, $limit, $admin) {
-    	$this->set_module_variable('crits_stuff', $crits?: []);
-    	$this->set_module_variable('order_stuff', $order?: []);
+    protected function getTableCrits($defaultCrits) {
+    	return Utils_RecordBrowser_Crits::and($defaultCrits, $this->getSearchCrits());
+    }
+    
+    protected function getTableOrder($defaultOrder) {
+    	if (! $this->getBrowseModeController()->getOrder()) {
+    		$tableFields = $this->getTableFields();
+    		
+    		$cleanOrder = array();
+    		foreach ($defaultOrder as $k => $v) {
+    			if ($k[0] == ':') {
+    				$cleanOrder[$k] = $v;
+    				continue;
+    			}
+    			
+    			if (! $field = $tableFields[$k]?? []) continue;
+    			
+    			$cleanOrder[_V($field['name'])] = $v;
+    		}
+    		
+    		$this->getGenericBrowser()->set_default_order($cleanOrder, $this->changed_view);
+    	}    	
     	
-    	$options = [
+    	return $this->getGenericBrowser()->get_order();
+    }
+    
+    protected function setTableOptions($crits, $options) {
+    	$this->set_module_variable('crits_stuff', $crits?: []);
+    	$this->set_module_variable('order_stuff', $options['order']?? []);
+    	
+    	$options = array_merge([
     			'tab' => $this->getTab(),
     			'crits' => $crits,
     			'cols' => $this->getCustomColumns(),
-    			'order' => $order,
-    			'limit' => $limit,
-    			'admin' => $admin,
-    	];
+    	], $options);
     	
     	$key = md5(serialize($options));
     	
     	$_SESSION['client']['utils_recordbrowser'][$key] = $options;
+    }
+    
+    protected function setAction($modeOrAction) {
+    	$map = [
+    			'browse' => _M('Browse'),
+    			'add' => _M('New record'),
+    			'edit' => _M('Edit record'),
+    			'view' => _M('View record'),
+    			'history' => _M('Record history view')
+    	];
+    	
+    	$this->action = $map[$modeOrAction]?? $modeOrAction;
+    	
+    	return $this;
+    }
+    
+    protected function getAction() {
+    	return _V($this->action);
     }
     
     public static function getRecordListOptions($key) {
@@ -757,13 +789,30 @@ class Utils_RecordBrowser extends Module {
     	return $ret;
     }
     
-    protected function getTableRecords($crits = [], $order = [], $limit = null, $admin = false) {
-    	$records = [];
+    protected function getTableRecords($crits = [], $options = []) {
+    	$options = array_merge([
+    			'limit' => null,
+    			'order' => []
+    	], $options);
+    	
+    	$options['order'] = $this->getTableOrder($options['order']);
+    	
+    	$crits = $this->getTableCrits($crits);
+    	
+    	$this->setRecordsCount($this->getRecordset()->count($crits, $options));
+    	
+    	$this->setTableOptions($crits, $options);
+    	
+    	$gb = $this->getGenericBrowser();
+    	
+    	if (! $this->disabled['pagination'] && is_null($options['limit'])) {
+    		$options['limit'] = $gb->get_limit($this->getRecordsCount());
+    	}
     	
     	$last_offset = $this->get_module_variable('last_offset');
-    	
-    	while (!$records) {
-    		$records = $this->getRecordset()->getRecords($crits, $order, $limit, $admin);
+
+    	while (! $records = $this->getRecordset()->find($crits, $options)) {
+    		$limit = $options['limit'];
     		
     		if ($last_offset > $limit['offset'] && ($limit['offset'] - $limit['numrows'])>=0) {
     			$limit['offset'] -= $limit['numrows'];
@@ -772,13 +821,14 @@ class Utils_RecordBrowser extends Module {
     			$limit['offset'] += $limit['numrows'];
     		}
     		else break;
+    			
+    		$gb->set_module_variable('offset', $limit['offset']);
     		
-    		$this->getGenericBrowser()->set_module_variable('offset', $limit['offset']);
-    		$limit = $this->getGenericBrowser()->get_limit($this->getRecordsCount());
+    		$options['limit'] = $gb->get_limit($this->getRecordsCount());
     	}
     	
     	$this->set_module_variable('last_offset', $limit['offset']);
-    	
+
     	return $records;
     }
     
@@ -820,17 +870,21 @@ class Utils_RecordBrowser extends Module {
     	return $href;
     }
     
-    protected function addTableRowActions(Utils_RecordBrowser_Recordset_Record $record, Utils_GenericBrowser_RowObject $gb_row, $admin) {
+    protected function addTableRowActions(Utils_RecordBrowser_Recordset_Record $record, Utils_GenericBrowser_RowObject $gb_row, $options = []) {
     	if ($this->disabled['actions'] === true) return;
     	
-		$disabledActions = is_array($this->disabled['actions'])? array_flip($this->disabled['actions']): [];		
+		$disabledActions = is_array($this->disabled['actions'])? array_flip($this->disabled['actions']): [];
+		
+		$options = array_merge([
+				'admin' => false,
+		], $options);
 
 		if (! isset($disabledActions['view'])) {
 			$gb_row->add_action($this->create_callback_href([$this,	'navigate'], ['view_entry', 'view', $record['id']]), __('View'), null, 'view');
 		}
 		
 		if (! isset($disabledActions['edit'])) {			
-			if ($record->getUserAccess('edit', $admin)) {
+			if ($record->getUserAccess('edit', $options['admin'])) {
 				$gb_row->add_action($this->create_callback_href([$this, 'navigate'], ['view_entry', 'edit', $record['id']]), __('Edit'), null, 'edit');
 			}
 			else {
@@ -838,7 +892,7 @@ class Utils_RecordBrowser extends Module {
 			}
 		}
 		
-		if ($admin) {
+		if ($options['admin']) {
 			if ($record[':active']) {
 				$gb_row->add_action($this->create_callback_href([$this, 'set_active'], [$record['id'], false]), __('Deactivate'), null, 'active-on');
 			}
@@ -857,7 +911,7 @@ class Utils_RecordBrowser extends Module {
 		}
 		else {
 			if (! isset($disabledActions['delete'])) {
-				if ($record->getUserAccess('delete', $admin)) {
+				if ($record->getUserAccess('delete', $options['admin'])) {
 					$gb_row->add_action($this->create_confirm_callback_href(__('Are you sure you want to delete this record?'), [$this, 'delete_record'], [$record['id'], false]), __('Delete'), null, 'delete');
 				}
 				else {
@@ -930,62 +984,43 @@ class Utils_RecordBrowser extends Module {
 	}
    
     //////////////////////////////////////////////////////////////////////////////////////////
-    public function show_data($crits = array(), $cols = array(), $order = array(), $admin = false, $special = false, $pdf = false, $limit = null) {
-    	//hide columns as per $cols
-    	$customColumns = array_merge($this->getCustomColumns(), $cols);
-
-    	if (!$pdf && !$admin) {
-    		if ($this->modeEnabled('favorites')) {
-				$fav = [
-						'name' => '&nbsp;',
-						'width' => '24px',
-						'attrs' => 'class="Utils_RecordBrowser__favs"',
-						'position' => -10,
-						'cell_callback' => [__CLASS__, 'getFavouriteCell']
-				];
-				if (! isset($this->force_order)) $fav['order'] = ':Fav';
-	    		$customColumns[] = $fav;
-    		}
-    		
-    		if ($this->modeEnabled('watchdog')) {
-    			$customColumns[] = [
-    					'name' => '&nbsp;',
-    					'width' => '24px',
-    					'attrs' => 'class="Utils_RecordBrowser__watchdog"',
-    					'position' => -5,
-    					'cell_callback' => [__CLASS__, 'getWatchdogCell']
-    			];
-    		}
-    	}
-
-    	if ($this->browse_mode == 'favorites') {
-    		$crits = Utils_RecordBrowserCommon::merge_crits($crits, [':Fav' => true]);
-    	}
-    	if ($this->browse_mode == 'watchdog') {
-    		$crits = Utils_RecordBrowserCommon::merge_crits($crits, [':Sub' => true]);
-    	}
-    	if ($this->browse_mode == 'recent') {
-    		$crits = Utils_RecordBrowserCommon::merge_crits($crits, [':Recent' => true]);
-    		//     		$order = array(':Visited_on' => 'DESC');
-    	}
+    public function show_data($crits = [], $cols = [], $order = [], $admin = false, $special = false, $pdf = false, $limit = null) {
+    	$browseModeColumns = Utils_RecordBrowser_BrowseMode_Controller::getColumns($this->getRecordset(), $this->disabled['browse_mode']);
     	
+    	//hide columns as per $cols
+    	$customColumns = array_merge($browseModeColumns, $this->getCustomColumns(), $cols);
+
+//     	if (!$pdf && !$admin) {
+//     		if ($this->modeEnabled('favorites')) {
+// 				$fav = [
+// 						'name' => '&nbsp;',
+// 						'width' => '24px',
+// 						'attrs' => 'class="Utils_RecordBrowser__favs"',
+// 						'position' => -10,
+// 						'cell_callback' => [__CLASS__, 'getFavouriteCell']
+// 				];
+// 				if (! isset($this->force_order)) $fav['order'] = ':Fav';
+// 	    		$customColumns[] = $fav;
+//     		}
+    		
+//     		if ($this->modeEnabled('watchdog')) {
+//     			$customColumns[] = [
+//     					'name' => '&nbsp;',
+//     					'width' => '24px',
+//     					'attrs' => 'class="Utils_RecordBrowser__watchdog"',
+//     					'position' => -5,
+//     					'cell_callback' => [__CLASS__, 'getWatchdogCell']
+//     			];
+//     		}
+//     	}
+
     	$this->setCustomColumns($customColumns);
     	
-    	return $this->displayRecordsTable($crits, $order, $limit, $admin);
+    	$crits = Utils_RecordBrowserCommon::merge_crits($crits, $this->getBrowseModeController()->getCrits());
+    	
+    	return $this->displayTable($crits, compact('order', 'limit', 'admin'));
     }
-    
-    protected static function getFavouriteCell ($record, $nolink, $desc, $admin) {
-    	static $favs;
-
-    	$favs = $favs?? $record->getRecordset()->getUserFavouriteRecords();
-
-    	return Utils_RecordBrowserCommon::get_fav_button($record->getTab(), $record[':id'], in_array($record[':id'], $favs));
-    }
-    
-    protected static function getWatchdogCell ($record, $nolink, $desc, $admin) {
-    	return Utils_WatchdogCommon::get_change_subscription_icon($record->getTab(), $record[':id']);
-    }
-    
+        
     /**
      * @return Utils_GenericBrowser
      */
@@ -1157,7 +1192,7 @@ class Utils_RecordBrowser extends Module {
 
 		if (is_numeric($id)) {
 	        $id = intVal($id);
-	    	self::$last_record = $this->record = $this->getRecordset()->getRecord($id, $mode!=='edit');
+	    	self::$last_record = $this->record = $this->getRecordset()->findOne($id, ['asHtml' => $mode!=='edit']);
 		} else {
 			self::$last_record = $this->record = $id;
 			$id = isset($this->record['id'])? intVal($this->record['id']): null;
@@ -1223,13 +1258,8 @@ class Utils_RecordBrowser extends Module {
         	return $this->back();
         }
 
-        switch ($mode) {
-            case 'add':     $this->action = _M('New record'); break;
-            case 'edit':    $this->action = _M('Edit record'); break;
-            case 'view':    $this->action = _M('View record'); break;
-            case 'history':    $this->action = _M('Record history view'); break;
-        }
-
+        $this->setAction($mode);
+        
         if ($mode=='edit') {
             $this->set_module_variable('edit_start_time',$time);
         }
@@ -1670,7 +1700,7 @@ class Utils_RecordBrowser extends Module {
 				$values[$k] = $values[$k]?? $v;
 			}
 
-			$record = $this->getRecordset()->createRecord($values);
+			$record = $this->getRecordset()->entry($values);
 			
 			$editStartTime = date('Y-m-d H:i:s', $this->get_module_variable('edit_start_time'));
 			
@@ -1916,7 +1946,7 @@ class Utils_RecordBrowser extends Module {
         $this->force_order = $arg;
     }
     public function caption(){
-        return $this->caption . ': ' . _V($this->action);
+        return $this->getCaption() . ': ' . _V($this->action);
     }
     public function recordpicker($element, $format, $crits=array(), $cols=array(), $order=array(), $filters=array(), $select_form = '') {
         $this->set_module_variable('element',$element);
@@ -2177,7 +2207,6 @@ class Utils_RecordBrowser extends Module {
 			$this->clipboard_pattern = $this->recordset->getClipboardPattern();
 			$this->setCaption($this->recordset->getCaption());
 			$this->setIcon($this->recordset->getIcon());
-			$this->recent = $this->recordset->getProperty('recent');
 			$this->full_history = $this->recordset->getProperty('full_history');
 		}
 		

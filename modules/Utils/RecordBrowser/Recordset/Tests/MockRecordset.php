@@ -72,7 +72,7 @@ class Utils_RecordBrowser_Recordset_Tests_MockRecordset extends Utils_RecordBrow
 		return $this;
 	}
 	
-	public function getRecord($id, $htmlspecialchars = true) {
+	public function findOne($id, $asHtml = true) {
 		return $this->records[$id]?? [];
 	}
 }

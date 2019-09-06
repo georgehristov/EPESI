@@ -36,7 +36,7 @@ class Utils_RecordBrowser_FileActionHandler
             return false;
         }
         
-        $record = Utils_RecordBrowser_Recordset::create($tab)->getRecord($recordId);
+        $record = Utils_RecordBrowser_Recordset::create($tab)->findOne($recordId);
         
         if (! $field = $record->getRecordset()->getField($field)) return false;
         

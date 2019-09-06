@@ -63,15 +63,21 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
         return $this[':id'];
     }
 
-    public function getDisplayValues($nolink = false, $customFieldIds = [], $quiet = true) {
-    	$customFieldIds = array_map([Utils_RecordBrowserCommon::class, 'get_field_id'], $customFieldIds);
+    public function getDisplayValues($options = []) {
+    	$options = array_merge([
+    			'nolink' => false,
+    			'fields' => [],
+    			'quiet' => true
+    	], $options);
+    	
+    	$customFieldIds = array_map([Utils_RecordBrowserCommon::class, 'get_field_id'], $options['fields']);
     	
     	$hash = $this->getRecordset()->getHash();
     	$fieldIds = $customFieldIds? array_intersect_key($hash, array_flip($customFieldIds)): $hash;
     	
     	$fields = array_intersect_key($this->getFields(), array_flip($fieldIds));
 
-    	if ($customFieldIds && !$quiet && count($customFieldIds) != count($fields)) {
+    	if ($customFieldIds && !$options['quiet'] && count($customFieldIds) != count($fields)) {
     		trigger_error('Unknown field names: ' . implode(', ', array_diff($customFieldIds, array_keys($fields))), E_USER_ERROR);
     	}
     		
@@ -79,7 +85,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	foreach ($fields as $field) {
     		if (!isset($this[$field->getArrayId()])) continue;
     		
-    		$ret[$field->getArrayId()] = $this->getValue($field, $nolink);
+    		$ret[$field->getArrayId()] = $this->getValue($field, $options);
     	}
     	
     	return $ret;
@@ -90,8 +96,8 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
      * 
      * @return string
      */
-    public function getValue($field, $nolink) {
-    	return $this->getRecordset()->getField($field)->display($this, $nolink);
+    public function getValue($field, $options = []) { //$nolink) {
+    	return $this->getRecordset()->getField($field)->display($this, $options);//$nolink);
     }
     
     public function getUserAccess($action = 'view', $admin = false) {
@@ -161,16 +167,19 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
      * Get only values of record - exclude internal and special properties
      * @return array
      */
-    private function getValues($nolink = false, $checkAccess = false) {
-    	$access = $checkAccess? $this->getUserAccess(): true;
+    private function getValues($options = []) {
+    	$options = array_merge([
+    			'nolink' => false,
+    			'checkAccess' => false
+    	], $options);
     	
-    	if (!$access) return [];
+    	if (! $access = $options['checkAccess']? $this->getUserAccess(): true) return [];
     	
     	$ret = [];    	
     	foreach ($this->getFields() as $field) {
     		if (isset($access[$field->getId()]) && !$access[$field->getId()]) continue;
     		
-    		$ret[$field->getId()] = $this->getValue($field, $nolink);
+    		$ret[$field->getId()] = $this->getValue($field, $options['nolink']);
     	}
         
         return $ret;
@@ -180,31 +189,37 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
         return $property[0] == ':';
     }
 
-    public function read($htmlspecialchars = true) {
+    public function read($options = []) {
     	if (!$id = $this->getId()) {
     		trigger_error('Missing record id when attempting to read', E_USER_ERROR);
     	}
     	
     	$row = DB::GetRow("SELECT * FROM {$this->getTab()}_data_1 WHERE id=%d", [$id]);
-
-    	return $this->load($row, $htmlspecialchars, false);
+    	
+    	return $this->load($row, array_merge([
+    			'asHtml' => true
+    	], $options, [
+    			'dirty' => false
+    	]));
     }
     
     /**
      * Loads raw DB values array to the record fields
      * 
      * @param array 	$row - values from the DB
-     * @param boolean 	$htmlspecialchars
+     * @param boolean 	$asHtml
      * @param boolean 	$dirty - use only provided values or fill all record fields with default values if not provided
      * @return Utils_RecordBrowser_Recordset_Record
      */
-    public function load($row, $htmlspecialchars = true, $dirty = true) {
+    public function load($row, $options = []) {
+    	$dirty = $options['dirty']?? true;
+    	
     	foreach ($this->getFields() as $field) {
     		$row[$field->getSqlId()] = $row[$field->getSqlId()]?? ($row[$field->getArrayId()]?? ($row[$field->getId()]?? null));
     		
     		if (!isset($row[$field->getSqlId()]) && $dirty) continue;
     		    		
-    		$result = $field->process($row, 'get', compact('htmlspecialchars'));
+    		$result = $field->process($row, 'get', $options);
 
     		$this[$field->getArrayId()] = $result[$field->getArrayId()]?? '';
     	}
@@ -221,11 +236,11 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	$this->load($values);
     }
     
-    public function save() {
-        return $this->getId()? $this->update(): $this->add();
+    public function save($options = []) {
+    	return $this->getId()? $this->update($options): $this->insert($options);
     }
     
-    public function add()
+    public function insert($options = [])
     {
     	$this->loadDefaults();
 
@@ -282,25 +297,41 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $this;
     }
     
-    public function update($allFields = false, $onDate = null, $dontNotify = false) {
+    /**
+     * Update the record entry in the database
+     * 
+     * @param array $options
+     * 		- allFields: update all fields or only provided ones (dirty)
+     * 		- onDate: log the update as done onDate 
+     * 		- dontNotify: do not notify subscribed users about changes
+     * 
+     * @return Utils_RecordBrowser_Recordset_Record
+     */
+    public function update($options = []) {
     	if (!$this->getId()) {
     		trigger_error('Missing record id when attempting to update', E_USER_ERROR);
     	}
     	
     	$recordset = $this->getRecordset();
 
-    	$existing = $recordset->getRecord($this->getId())->toArray();
+    	$existing = $recordset->findOne($this->getId())->toArray();
 
    		$values = $this->process('edit');
 
    		if ($values === false) return $this;
-
+   		
+   		$options = array_merge([
+   				'allFields' => false,
+   				'onDate' => null,
+   				'dontNotify' => false
+   		], $options);
+   		
     	$diff = [];
     	$fieldList = [];
     	$fieldValues = [];
     	foreach ( $recordset->getFields() as $field ) {
     		if (! isset($values[$field->getId()])) {
-    			if (! $allFields) continue;
+    			if (! $options['allFields']) continue;
     			
     			$values[$field->getId()] = '';
     		}
@@ -330,10 +361,10 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 
 			$this->process('edited');
 		
-			if (! $dontNotify) {
+			if (! $options['dontNotify']) {
 				$diff = $recordset->process($diff, 'edit_changes');
 
-				$editId = $this->logHistory($diff, $onDate);
+				$editId = $this->logHistory($diff, $options['onDate']);
 				
 				Utils_WatchdogCommon::new_event($this->getTab(), $this->getId(), 'E_' . $editId);
 			}
@@ -344,7 +375,9 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $this;
     }
 
-    public function delete($permanent = false) {
+    public function delete($options = []) {
+    	$permanent = $options['permanent']?? false;
+    	
     	if (!$permanent) return $this->setActive(false);
     	
     	$values = $this->process('delete');
@@ -364,7 +397,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $ret;
     }
 
-    public function restore() {
+    public function restore($options = []) {
         return $this->setActive();
     }
     
@@ -518,8 +551,10 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $this->getRecordset()->getFields($order);
     }
     
-    public function createHref($action = 'view', $more = []){
-    	return Module::create_href($this->getHrefArray($action) + $more);
+    public function createHref($action = 'view', $urlOptions = []) {
+    	$urlOptions = is_array($urlOptions)? $urlOptions: [];
+    	
+    	return Module::create_href($this->getHrefArray($action) + $urlOptions);
     }
     
     public function getHrefArray($action = 'view'){
@@ -551,13 +586,24 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 	    return true;
     }
     
-    public function createDefaultLinkedLabel($nolink=false, $includeTabCaption=true, $tooltip = true, $more = []){
+    public function createDefaultLinkedLabel($options = []) {
+    	$options = array_merge([
+    			'nolink' => false,
+    			'tooltip' => true,
+    			'includeTabCaption' => true,
+    			'urlOptions' => []
+    	], $options);
+    	
     	$label = '';
     	if ($this->getUserAccess()) {
-    		if ($description_pattern = $this->getRecordset()->getProperty('description_pattern')) {
-    			$label = trim(Utils_RecordBrowserCommon::replace_clipboard_pattern($description_pattern, $this->getValues(true, true)));
-    		} elseif ($description_callback = $this->getRecordset()->getProperty('description_callback')) {
-    			$label = call_user_func($description_callback, $this->toArray(), $nolink);
+    		if ($descriptionPattern = $this->getRecordset()->getProperty('description_pattern')) {
+				$label = trim(Utils_RecordBrowserCommon::replace_clipboard_pattern($descriptionPattern, $this->getValues([
+						'nolink' => true,
+						'checkAccess' => true
+				])));
+			}
+			elseif ($descriptionCallback = $this->getRecordset()->getProperty('description_callback')) {
+    			$label = call_user_func($descriptionCallback, $this->toArray(), $options['nolink']);
     		} else {
     			foreach ($this->getFields() as $field) {
     				if (! $field->isDescriptive()) continue;
@@ -571,12 +617,12 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	$tabCaption = $this->getRecordset()->getCaption();
     	if (!$tabCaption || $tabCaption == '---') $tabCaption = $this->getTab();
 
-   		$label = $label? ($includeTabCaption? $tabCaption . ': ': '') . $label: sprintf("%s: #%06d", $tabCaption, $this->getId());
+    	$label = $label? ($options['includeTabCaption']? $tabCaption . ': ': '') . $label: sprintf("%s: #%06d", $tabCaption, $this->getId());
 
-    	return $this->createLinkedText($label, $nolink, $tooltip, $more);
+    	return $this->createLinkedText($label, $options);
     }
         
-    public function createLinkedLabel($cols, $nolink = false, $tooltip = false, $more = []) { 
+    public function createLinkedLabel($cols, $options = []) { //$nolink = false, $tooltip = false, $more = []) { 
     	$cols = is_array($cols)? $cols: explode('|', $cols);
     	
     	$pattern = [];
@@ -586,16 +632,22 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     		$pattern[] = "%{{{$col}}}";
     	}  
     	
-    	return $this->createLinkedPattern(implode(' ', $pattern), $nolink, $tooltip, $more);
+    	return $this->createLinkedPattern(implode(' ', $pattern), $options);
     }
     
-    public function createLinkedPattern($pattern, $nolink = false, $tooltip = false, $more = []) {
+    public function createLinkedPattern($pattern, $options = []) { //$nolink = false, $tooltip = false, $more = []) {
     	$label = trim(Utils_RecordBrowserCommon::replace_clipboard_pattern($pattern, $this->toArray()))?: $this->getRecordset()->getCaption() . ": " . sprintf("#%06d", $this->getId());
     	
-    	return $this->createLinkedText($label, $nolink, $tooltip, $more);
+    	return $this->createLinkedText($label, $options);
     }
 
-    public function createLinkedText($text, $nolink = false, $tooltip = true, $more = []) {
+    public function createLinkedText($text, $options = []) { //$nolink = false, $tooltip = true, $more = []) {
+    	$options = array_merge([
+    			'nolink' => false,
+    			'tooltip' => false,
+    			'urlOptions' => []
+    	], $options);
+    	
     	$tip = $openTag = $closeTag = '';
 
     	if (! $this->isActive()) {
@@ -604,11 +656,11 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     		$closeTag = '</del>';
     	}
     	
-    	if (!$nolink) {
+    	if (! $options['nolink']) {
     		if ($this->getUserAccess()) {
-    			$href = $this->createHref('view', $more);
+    			$href = $this->createHref('view', $options['urlOptions']);
     			
-    			$tipAttrs = $tooltip? $this->getDefaultTooltipAttrs($tip? $tip . '<hr>': ''): Utils_TooltipCommon::open_tag_attrs($tip);
+    			$tipAttrs = $options['tooltip']? $this->getDefaultTooltipAttrs($tip? $tip . '<hr>': ''): Utils_TooltipCommon::open_tag_attrs($tip);
     			
     			$openTag = "<a $tipAttrs $href>$openTag";
     			$closeTag .= '</a>';
@@ -626,12 +678,18 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $openTag . $text . $closeTag;    	
     }
     
-    public function createTooltip($label, $nolink = false, $tooltip = false) {
+    public function createTooltip($label, $options) { //$nolink = false, $tooltip = false) {
+    	$options = array_merge([
+    			'nolink' => false,
+    			'tooltip' => false
+    	], $options);
     	
-    	if (!$tooltip || $nolink || Utils_TooltipCommon::is_tooltip_code_in_str($label))
+    	$tooltip = $options['tooltip'];
+    	
+    	if (! $tooltip || $options['nolink'] || Utils_TooltipCommon::is_tooltip_code_in_str($label))
     		return $label;
     		
-    	if (!is_array($tooltip)) return $this->createDefaultTooltip($label);
+    		if (!is_array($options['tooltip'])) return $this->createDefaultTooltip($label);
     			
     	//args name => expected index (in case of numeric indexed array)
     	$tooltip_create_args = ['tip'=>0, 'args'=>1, 'help'=>1, 'max_width'=>2];

@@ -20,10 +20,10 @@ class Utils_RecordBrowser_Recordset_Field_Text extends Utils_RecordBrowser_Recor
 	  
 	public static function decodeValue($value, $options = []) {
 		$options = array_merge([
-				'htmlspecialchars' => true
+				'asHtml' => true
 		], $options);
 		
-		return $options['htmlspecialchars']? htmlspecialchars($value): $value;
+		return $options['asHtml']? htmlspecialchars($value): $value;
     }
     
     public function getAjaxTooltipOpts() {

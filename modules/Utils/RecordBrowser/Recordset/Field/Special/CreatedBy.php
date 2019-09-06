@@ -34,4 +34,22 @@ class Utils_RecordBrowser_Recordset_Field_Special_CreatedBy extends Utils_Record
 	public function getArrayId() {
 		return ':' . $this->getId();
 	}
+	
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+		
+		$field = $this->getQueryId();
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+		
+		$sql = "$field $operator %d";
+		if (stripos($operator, '!') !== false) {
+			$sql = "NOT ($sql)";
+		}
+		
+		return $this->getRecordset()->createQuery($sql, [$value]);
+	}
 }

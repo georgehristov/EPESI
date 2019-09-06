@@ -211,11 +211,11 @@ abstract class RBO_Recordset {
     /**
      * Get single record from recordset by id
      * @param int $id
-     * @param bool $htmlspecialchars quote values using htmlspecialchars
+     * @param bool $asHtml quote values using htmlspecialchars
      * @return RBO_Record
      */
-    public function get_record($id, $htmlspecialchars = true) {
-        $record = Utils_RecordBrowserCommon::get_record($this->tab, $id, $htmlspecialchars);
+    public function get_record($id, $asHtml = true) {
+        $record = Utils_RecordBrowserCommon::get_record($this->tab, $id, $asHtml);
         return $this->record_to_object($record);
     }
 

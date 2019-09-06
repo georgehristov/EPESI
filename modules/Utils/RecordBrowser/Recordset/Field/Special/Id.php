@@ -32,7 +32,10 @@ class Utils_RecordBrowser_Recordset_Field_Special_Id extends Utils_RecordBrowser
 		
 		if (!is_numeric($id)) return $id;
 		
-		return Utils_RecordBrowser_Recordset::create($tab)->getRecord($id)->createDefaultLinkedLabel($nolink, false);
+		return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->createDefaultLinkedLabel([
+				'nolink' => $nolink,
+				'includeTabCaption' => false,
+		]);
 	}
 	
 	public function getSqlId() {

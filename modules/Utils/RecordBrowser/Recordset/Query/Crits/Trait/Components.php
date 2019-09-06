@@ -50,7 +50,7 @@ trait Utils_RecordBrowser_Recordset_Query_Crits_Trait_Components
     {
     	if (!$this->isActive()) return [];
     	
-    	$values = is_numeric($values)? $recordset->getRecord($values)->toArray(): $values;
+    	$values = is_numeric($values)? $recordset->findOne($values)->toArray(): $values;
     	
     	$issues = [];    	
     	foreach ($this->getComponents() as $crits) {

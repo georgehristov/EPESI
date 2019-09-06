@@ -72,6 +72,14 @@ class Utils_RecordBrowser_Recordset_Query implements ArrayAccess
 		
 		return $this->{$key};
 	}
+
+	public function append(Utils_RecordBrowser_Recordset_Query $query, $junction = 'OR') 
+	{
+		$result = self::merge($this, $query, $junction);
+		
+		$this->setSql($result->getSql());
+		$this->setValues($result->getValues());
+	}
 	
 	/**
 	 * @param Utils_RecordBrowser_Recordset_Query $queryA

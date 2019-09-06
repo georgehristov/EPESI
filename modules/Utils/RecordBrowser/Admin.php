@@ -261,9 +261,9 @@ class Utils_RecordBrowser_Admin extends Module {
         
 		$form = $this->init_module(Libs_QuickForm::module_name());
         
-        $r = $this->getRecordset()->getClipboardPattern(true);
+        $entry = $this->getRecordset()->getClipboardPatternEntry();
         
-		$form->addElement('select', 'enable', __('Enable'), [
+		$form->addElement('select', 'enabled', __('Enabled'), [
 				__('No'),
 				__('Yes')
 		]);
@@ -291,18 +291,21 @@ class Utils_RecordBrowser_Admin extends Module {
 			$form->freeze();
 		}
 		
-		$form->setDefaults($r ? [
-				'enable' => $r['enabled'] ? 1: 0,
-				'pattern' => $r['pattern']
+		$form->setDefaults($entry ? [
+				'enabled' => $entry['enabled'] ? 1: 0,
+				'pattern' => $entry['pattern']
 		]: [
-				'enable' => 0
+				'enabled' => 0
 		]);
 
         $form->display_as_column();
         
         if ($full_access && $form->validate()) {
-            $this->getRecordset()->setClipboardPattern($form->exportValue('pattern'), $form->exportValue('enable'), true);
-        }
+			$this->getRecordset()->setClipboardPattern($form->exportValue('pattern'), [
+					'enabled' => $form->exportValue('enabled'),
+					'force' => true
+			]);
+		}
     }
     public function setup_loader() {
         if (isset($_REQUEST['field_pos'])) {
@@ -338,21 +341,21 @@ class Utils_RecordBrowser_Admin extends Module {
         //read database
 		$rows = end($adminFields);
 		$rows = $rows['position'];
-		foreach($adminFields as $field=>$args) {
+		foreach($adminFields as $field => $args) {
             $gb_row = $gb->get_new_row();
 			if ($full_access) {
 				if ($args['type'] != 'page_split') {
-					$gb_row->add_action($this->create_callback_href(array($this, 'view_field'),array('edit',$field)),'Edit');
+					$gb_row->add_action($this->create_callback_href(array($this, 'view_field'),array('edit',$field)), __('Edit'));
 				} elseif ($field!='General') {
-					$gb_row->add_action($this->create_callback_href(array($this, 'delete_page'),array($field)),'Delete');
-					$gb_row->add_action($this->create_callback_href(array($this, 'edit_page'),array($field)),'Edit');
+					$gb_row->add_action($this->create_callback_href(array($this, 'delete_page'),array($field)), __('Delete'));
+					$gb_row->add_action($this->create_callback_href(array($this, 'edit_page'),array($field)), __('Edit'));
 				}
 				if ($args['type']!=='page_split' && $args['extra']){
-					if ($args['active']) $gb_row->add_action($this->create_callback_href(array($this, 'set_field_active'),array($field, false)),'Deactivate', null, 'active-on');
-					else $gb_row->add_action($this->create_callback_href(array($this, 'set_field_active'),array($field, true)),'Activate', null, 'active-off');
+					if ($args['active']) $gb_row->add_action($this->create_callback_href(array($this, 'set_field_active'),array($field, false)), __('Deactivate'), null, 'active-on');
+					else $gb_row->add_action($this->create_callback_href(array($this, 'set_field_active'),array($field, true)), __('Activate'), null, 'active-off');
 				}
                 if ($field != 'General') {
-                    $gb_row->add_action('class="move-handle"','Move', __('Drag to change field position'), 'move-up-down');
+                    $gb_row->add_action('class="move-handle"', __('Move'), __('Drag to change field position'), 'move-up-down');
                     $gb_row->set_attrs("field_name=\"$field\" class=\"sortable\"");
                 }
 			}
@@ -442,7 +445,7 @@ class Utils_RecordBrowser_Admin extends Module {
                         $args['required']?'<b>'.__('Yes').'</b>':__('No'),
                         $args['filter']?'<b>'.__('Yes').'</b>':__('No'),
                         $args['export']?'<b>'.__('Yes').'</b>':__('No'),
-                        is_array($args['param'])?serialize($args['param']):$args['param'],
+                        is_array($args['param'])? serialize($args['param']): $args['param'],
 						$d_c,
 						$QF_c
                     );

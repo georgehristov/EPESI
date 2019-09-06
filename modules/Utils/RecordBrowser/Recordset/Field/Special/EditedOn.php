@@ -52,4 +52,39 @@ class Utils_RecordBrowser_Recordset_Field_Special_EditedOn extends Utils_RecordB
 	public function processGet($values, $options = []) {
 		return [];
 	}
+	
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+
+		$vals = [];
+		if ($value === null) {
+			if ($operator == '=') {
+				$inj = 'IS NULL';
+			} elseif ($operator == '!=') {
+				$inj = 'IS NOT NULL';
+			} else {
+				throw new Exception('Cannot compare timestamp field null with operator: ' . $operator);
+			}
+		} else {
+			$inj = $operator . '%T';
+			$timestamp = Base_RegionalSettingsCommon::reg2time($value, false);
+			$vals[] = $timestamp;
+			$vals[] = $timestamp;
+		}
+		
+		$sql = '(((SELECT MAX(edited_on) FROM ' . $this->getTab() . '_edit_history WHERE ' . $this->getTab() . '_id='.$this->getRecordset()->getDataTableAlias().'.id) ' . $inj . ') OR ' .
+				'((SELECT MAX(edited_on) FROM ' . $this->getTab() . '_edit_history WHERE ' . $this->getTab() . '_id='.$this->getRecordset()->getDataTableAlias().'.id) IS NULL AND '.$this->getRecordset()->getDataTableAlias().'.created_on ' . $inj . '))';
+		
+		if (stripos($operator, '!') !== false) {
+			$sql = "NOT (COALESCE($sql, FALSE))";
+		}
+		
+		return $this->getRecordset()->createQuery($sql, $vals);
+	}
 }

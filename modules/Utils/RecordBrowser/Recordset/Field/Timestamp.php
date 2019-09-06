@@ -93,6 +93,38 @@ class Utils_RecordBrowser_Recordset_Field_Timestamp extends Utils_RecordBrowser_
 		return parent::validate($critsCheck, $value);
 	}
 	
+	public function getQuery(Utils_RecordBrowser_Recordset_Query_Crits_Basic $crit)
+	{
+		if ($crit->getValue()->isRawSql()) {
+			return $this->getRawSQLQuerySection($crit);
+		}
+		
+		$field = $this->getQueryId();
+		$operator = $crit->getSQLOperator();
+		$value = $crit->getSQLValue();
+		
+		$vals = [];
+		if ($operator == DB::like()) {
+			$casttype = DB::is_postgresql() ? 'varchar' : 'char';
+			$sql = "CAST($field AS $casttype) $operator %s";
+			
+			$vals[] = $value;
+		}
+		elseif (!$value) {
+			$sql_null = stripos($operator, '!') !== false? 'NOT': '';
+			
+			$sql = "$field IS $sql_null NULL";
+		}
+		else {
+			$null_part = ($operator == '<' || $operator == '<=') ? " OR $field IS NULL" : " AND $field IS NOT NULL";
+			$value = Base_RegionalSettingsCommon::reg2time($value, false);
+			$sql = "($field $operator %T $null_part)";
+			$vals[] = $value;
+		}
+		
+		return $this->getRecordset()->createQuery($sql, $vals);
+	}
+	
 	public function queryBuilderFilters($opts = []) {
 		return [
 				[

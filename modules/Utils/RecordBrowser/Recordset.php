@@ -315,8 +315,8 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		$name = preg_match('/^[0-9]+$/', strval($name))? ($this->getPKeyHash($name)?: $name): $name; // numeric
 		
-		$fieldName = isset($fields[$name])? $name: ($this->getHash($name)?: $this->getKeyHash($name));
-		
+		$fieldName = isset($fields[$name])? $name: $this->getHash($name);
+
 		if (!$fieldName || !isset($fields[$fieldName])) {
 			if (!$quiet) {
 				trigger_error('Unknown field "'.$name.'" for recordset "'.$this->getTab().'"',E_USER_ERROR);
@@ -331,35 +331,15 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	public function getHash($name = null, $key = 'id') {
 		if (!$this->hash) {
 			foreach ($this->getAdminFields() as $field) {
-				$this->hash[$field->getId()] = $field->getName();
+				$this->hash[$field->getId()] = $field['field'];
+				
+				if (!$arrayId = $field->getArrayId()) continue;
+				
+				$this->hash[$arrayId] = $field['field'];
 			}
 		}	
 		
 		return $name? ($this->hash[strtolower($name)]?? null): $this->hash;
-	}
-	
-	public function getKeyHash($name = null) {
-		if (!$this->keyHash) {
-			foreach ($this->getAdminFields() as $field) {
-				if (!$arrayId = $field->getArrayId()) continue;
-				
-				$this->keyHash[$arrayId] = $field->getName();
-			}
-		}	
-		
-		return $name? ($this->keyHash[strtolower($name)]?? null): $this->keyHash;
-	}
-	
-	public function getPKeyHash($id = null) {
-		if (!$this->pKeyHash) {
-			foreach ($this->getAdminFields() as $field) {
-				if (!$pKey = $field['pkey']) continue;
-				
-				$this->keyHash[$pKey] = $field['pkey'];
-			}
-		}	
-		
-		return $id? ($this->pKeyHash[$id]?? null): $this->pKeyHash;
 	}
 	
 	public function getRecordArrayKeys() {
@@ -480,34 +460,30 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return $this;
 	}
 		
-	public function getClipboardPattern($with_state = false) {
-		if($with_state) {
-			$ret = DB::GetArray('SELECT pattern,enabled FROM recordbrowser_clipboard_pattern WHERE tab=%s', [
-					$this->getTab()
-			]);
-			if (sizeof($ret)) return $ret[0];
-		}
-
-		return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
-	}
-	
 	/**
 	 * Method to manipulate clipboard pattern
 	 * 
 	 * @param string|null 		$pattern pattern, or when it's null the pattern stays the same, only enable state changes
-	 * @param bool 				$enabled new enabled state of clipboard pattern
-	 * @param bool 				$force make it true to allow any changes or overwrite when clipboard pattern exist
+	 * @param array $options
+	 * 		- enabled: new enabled state of clipboard pattern
+	 * 		- force: make it true to allow any changes or overwrite when clipboard pattern exist
 	 * @return bool 			true if any changes were made, false otherwise
 	 */
-	public function setClipboardPattern($pattern, $enabled = true, $force = false) {
+
+	public function setClipboardPattern($pattern, $options = []) {
 		$tab = $this->getTab();
 		
+		$options = array_merge([
+				'enabled' => true,
+				'force' => false
+		], $options);
+		
 		$ret = null;
-		$enabled = $enabled ? 1 : 0;
-		$existing = $this->getClipboardPattern(true);
+		$enabled = $options['enabled'] ? 1 : 0;
+		$existing = $this->getClipboardPatternEntry();
 		
 		/* when pattern exists and i can overwrite it... */
-		if($existing && $force) {
+		if($existing && $options['force']) {
 			/* just change enabled state, when pattern is null */
 			if($pattern === null) {
 				$ret = DB::Execute('UPDATE recordbrowser_clipboard_pattern SET enabled=%d WHERE tab=%s', [$enabled, $tab]);
@@ -525,17 +501,33 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 
 		return $ret? true: false;
 	}
+	
+	public function getClipboardPatternEntry() {
+		$ret = DB::GetArray('SELECT pattern, enabled FROM recordbrowser_clipboard_pattern WHERE tab=%s', [
+					$this->getTab()
+		]);
 		
-	public function getRecords($crits = [], $order = [], $limit = [], $admin = false) {
-		$result = $this->select($crits, $order, $limit, $admin);
+		return $ret? $ret[0]: [];
+	}
+	
+	public function getClipboardPattern() {
+		return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
+	}
+	
+	public function find($crits = [], $options = []) {
+		$result = $this->select($crits, $options);
+		
+		$admin = $options['admin']?? false;
 	
 		$records = [];
 		while ($row = $result->FetchRow()) {
 			if (isset($records[$row['id']])) continue;
 			
-			$record = Utils_RecordBrowser_Recordset_Record::create($this)->load($row, true, false);
+			$record = Utils_RecordBrowser_Recordset_Record::create($this)->load($row, [
+					'dirty' => false
+			]);
 
-			if (!$admin && !$record->getUserAccess('view')) continue;
+			if (! $admin && ! $record->getUserAccess('view')) continue;
 			
 			$records[$record->getId()] = $record;
 		}
@@ -543,32 +535,57 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return $records;
 	}
 	
-	public function getRecord($idOrValuesOrObject, $htmlspecialchars = true) {
-		return $this->createRecord($idOrValuesOrObject)->read($htmlspecialchars);
+	public function findOne($idOrValuesOrObject, $options = []) { 
+		return $this->entry($idOrValuesOrObject)->read($options);
 	}
 	
-	public function createRecord($idOrValuesOrObject) {
+	public function entry($idOrValuesOrObject) {
 		if (is_object($idOrValuesOrObject)) return $idOrValuesOrObject;
 		
-		if (is_numeric($idOrValuesOrObject)) return $this->getRecord([':id' => $idOrValuesOrObject]);
+		if (is_numeric($idOrValuesOrObject)) return $this->findOne([':id' => $idOrValuesOrObject]);
 		
 		return Utils_RecordBrowser_Recordset_Record::create($this, $idOrValuesOrObject);
 	}
 	
-	public function addRecord($values = [])
+	public function insertOne($values = [], $options = [])
 	{
-		return Utils_RecordBrowser_Recordset_Record::create($this, $values)->add();
+		return Utils_RecordBrowser_Recordset_Record::create($this, $values)->insert();
 	}
 	
-	public function saveRecord($values = []) {
+	public function insertMany($records = [], $options = [])
+	{
+		$ret = true;
+		foreach ($records as $values) {
+			$ret &= $this->insertOne($values, $options)? true: false;
+		}
+		
+		return $ret;
+	}
+	
+	public function saveOne($values = []) {
 		return Utils_RecordBrowser_Recordset_Record::create($this, $values)->save();
 	}
 	
-	public function getRecordsCount($crits = [], $admin = false)
+	public function count($crits = [], $options = [])
 	{
-		$query = $this->getQuery($crits);
+		$query = $this->getQuery($crits, $options);
 				
 		return DB::GetOne($query->getCountSQL(), $query->getValues());
+	}
+	
+	public function deleteOne($idOrValuesOrObject, $options = [])
+	{
+		return $this->findOne($idOrValuesOrObject)->delete($options);
+	}
+	
+	public function deleteMany($crits, $options = [])
+	{
+		$ret = true;
+		foreach ($this->find($crits, $options) as $record) {
+			$ret &= $record->delete($options);
+		}
+		
+		return $ret;
 	}
 	
 	public function getDefaultValues($customDefaults) {
@@ -612,18 +629,24 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		return Utils_RecordBrowser_Recordset_Query::create($this, $sql, $values);
 	}
 	
-	protected function select($crits = [], $order = [], $limit = [], $admin = false)
+	protected function select($crits = [], $options = [])
 	{
-		$limit = is_numeric($limit)? ['numrows' => $limit]: ($limit?: []);
+		$options = array_merge([
+				'order' => [],
+				'limit' => [],
+				'admin' => false
+		], $options);
 		
-		$limit = array_merge($limit, [
+		$limit = is_numeric($options['limit'])? ['numrows' => $options['limit']]: ($options['limit']?: []);
+		
+		$limit = array_merge([
 				'offset' => 0,
 				'numrows' => -1
-		]);
+		], $limit);
 		
-		$query = $this->getQuery($crits);
-// 		var_dump($query->getSelectSql($order), $query->getValues());
-		return DB::SelectLimit($query->getSelectSql($order), $limit['numrows'], $limit['offset'], $query->getValues());
+		$query = $this->getQuery($crits, $options);
+		var_dump($query->getSelectSql($options['order']), $query->getValues());
+		return DB::SelectLimit($query->getSelectSql($options['order']), $limit['numrows'], $limit['offset'], $query->getValues());
 	}
 	
 	/**
@@ -631,10 +654,12 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	 * @param boolean $admin
 	 * @return Utils_RecordBrowser_Recordset_Query
 	 */
-	public function getQuery($crits = [], $admin = false)
+	public function getQuery($crits = [], $options = [])
 	{
 		static $cache;
 		static $stack = [];
+		
+		$admin = $options['admin']?? false;
 				
 		$key = md5(serialize([$this->getTab(), $this->getDataTableAlias(), $crits, $admin, Acl::get_user()]));
 		
