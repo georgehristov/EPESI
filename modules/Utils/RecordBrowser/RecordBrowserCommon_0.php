@@ -1531,7 +1531,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
      */
     public static function delete_record($tab, $id, $permanent = false)
     {
-    	return Utils_RecordBrowser_Recordset::create($tab)->deleteOne(compact('permanent'));
+    	return Utils_RecordBrowser_Recordset::create($tab)->deleteOne($id, compact('permanent'));
     }
 
     /**
