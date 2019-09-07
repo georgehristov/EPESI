@@ -10,12 +10,30 @@ class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMo
 		return $recordset->getProperty(self::$key);
 	}
 	
-	public function getOrder() {
+	public function order() {
 		return [':Visited_on' => 'DESC'];
 	}
 	
 	public function crits() {
 		return [':Recent' => true];
+	}
+	
+	public function recordInfo($record) {
+		return '<b>' . __('Visited on: %s', [$record['visited_on']]) . '</b><br>';
+	}
+	
+	public function process($values, $mode, $tab) {
+		switch ($mode) {
+			case 'view':
+			case 'edit':
+			case 'added':
+				if ($user = Acl::get_user()) {
+					Utils_RecordBrowserCommon::add_recent_entry($tab, $user, $values[':id']);
+				}
+				break;
+		}
+		
+		return $values;
 	}
 }
 

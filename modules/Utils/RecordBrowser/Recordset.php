@@ -599,12 +599,17 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	
 	public function process($values, $mode, $cloned = null) {
 		$values = is_object($values)? $values->toArray(): $values;
-		
-		$current = $values;
-		
+
 		$ret = $mode != 'display'? $values: [];
 		
 		$current = $mode == 'cloned'? ['original'=>$cloned, 'clone'=>$values]: $values;
+		
+		foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
+			if (! $controller->isAvailable($this)) continue;
+			
+			$current = $controller->process($current, $mode, $this->getTab());
+		}
+		
 		foreach ($this->getProcessMethods() as $callback) {
 			$return = call_user_func($callback, $current, $mode, $this->getTab());
 
@@ -645,7 +650,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		], $limit);
 		
 		$query = $this->getQuery($crits, $options);
-		var_dump($query->getSelectSql($options['order']), $query->getValues());
+// 		var_dump($query->getSelectSql($options['order']), $query->getValues());
 		return DB::SelectLimit($query->getSelectSql($options['order']), $limit['numrows'], $limit['offset'], $query->getValues());
 	}
 	

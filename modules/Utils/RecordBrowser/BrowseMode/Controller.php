@@ -23,6 +23,18 @@ class Utils_RecordBrowser_BrowseMode_Controller {
 		return [];
 	}
 		
+	public function recordInfo($record) {
+		return '';
+	}
+		
+	public function userSettings() {
+		return [];
+	}
+	
+	public function process($values, $mode, $tab) {
+		return $values;
+	}
+	
 	public function isAvailable(Utils_RecordBrowser_Recordset $recordset) {
 		return true;
 	}
@@ -55,6 +67,14 @@ class Utils_RecordBrowser_BrowseMode_Controller {
 		return $this->crits();
 	}
 		
+	public function getRecordInfo($record) {
+		return $this->recordInfo($record);
+	}
+		
+	public function getUserSettings() {
+		return $this->userSettings();
+	}
+		
 	final public static function getColumns($recordset, $disabled = []) {
 		$ret = [];
 		foreach (self::getRegistry() as $key => $controller) {
@@ -68,6 +88,9 @@ class Utils_RecordBrowser_BrowseMode_Controller {
 		return $ret;
 	}
 	
+	/**
+	 * @return Utils_RecordBrowser_BrowseMode_Controller[]
+	 */
 	final public static function getRegistry() {
 		return [
 				self::getKey() => new self()

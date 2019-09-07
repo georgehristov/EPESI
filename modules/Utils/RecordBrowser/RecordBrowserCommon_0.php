@@ -330,40 +330,84 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
     	return $tab_caption . call_user_func($callback, $tab_id, $args);
     }
 
-    public static function user_settings(){
-        $ret = DB::Execute('SELECT tab, caption, icon, recent, favorites, full_history FROM recordbrowser_table_properties');
-        $settings = array(0=>array(), 1=>array(), 2=>array(), 3=>array());
-        while ($row = $ret->FetchRow()) {
-			$caption = _V($row['caption']); // ****** RecordBrowser - recordset caption
-            if (!self::get_access($row['tab'],'browse')) continue;
-            if ($row['favorites'] || $row['recent']) {
-                $options = array('all'=>__('All'));
-                if ($row['favorites']) $options['favorites'] = __('Favorites');
-                if ($row['recent']) $options['recent'] = __('Recent');
-                if (Utils_WatchdogCommon::category_exists($row['tab'])) $options['watchdog'] = __('Watched');
-                $settings[0][] = array('name'=>$row['tab'].'_default_view','label'=>$caption,'type'=>'select','values'=>$options,'default'=>'all');
-            }
-            if ($row['favorites'])
-                $settings[1][] = array('name'=>$row['tab'].'_auto_fav','label'=>$caption,'type'=>'select','values'=>array(__('Disabled'), __('Enabled')),'default'=>0);
-            if (Utils_WatchdogCommon::category_exists($row['tab'])) {
-                $settings[2][] = array('name'=>$row['tab'].'_auto_subs','label'=>$caption,'type'=>'select','values'=>array(__('Disabled'), __('Enabled')),'default'=>0);
-            }
-			$settings[0][] = array('name'=>$row['tab'].'_show_filters','label'=>'','type'=>'hidden','default'=>0);
-        }
-        $final_settings = array();
-        $final_settings[] = array('name'=>'add_in_table_shown','label'=>__('Quick new record - show by default'),'type'=>'checkbox','default'=>0);
-        $final_settings[] = array('name'=>'hide_empty','label'=>__('Hide empty fields'),'type'=>'checkbox','default'=>0);
-        $final_settings[] = array('name'=>'enable_autocomplete','label'=>__('Enable autocomplete in select/multiselect at'),'type'=>'select','default'=>50, 'values'=>array(0=>__('Always'), 20=>__('%s records', array(20)), 50=>__('%s records', array(50)), 100=>__('%s records', array(100))));
-        $final_settings[] = array('name'=>'grid','label'=>__('Grid edit (experimental)'),'type'=>'checkbox','default'=>0);
-        $final_settings[] = array('name'=>'confirm_leave','label'=>__('Confirm before leave edit page'),'type'=>'checkbox','default'=>1);
-        $final_settings[] = array('name'=>'header_default_view','label'=>__('Default data view'),'type'=>'header');
-        $final_settings = array_merge($final_settings,$settings[0]);
-        $final_settings[] = array('name'=>'header_auto_fav','label'=>__('Automatically add to favorites records created by me'),'type'=>'header');
-        $final_settings = array_merge($final_settings,$settings[1]);
-        $final_settings[] = array('name'=>'header_auto_subscriptions','label'=>__('Automatically watch records created by me'),'type'=>'header');
-        $final_settings = array_merge($final_settings,$settings[2]);
-        return array(__('Browsing records')=>$final_settings);
-    }
+    public static function user_settings() {
+    	$settings = [];
+		foreach (self::list_installed_recordsets() as $tab => $caption) {
+			$recordset = Utils_RecordBrowser_Recordset::create($tab);
+			
+			if (! $recordset->getUserAccess('browse')) continue;
+			
+			if (! $values = Utils_RecordBrowser_BrowseMode_Controller::getSelectList($recordset)) continue;
+
+			$settings[] = [
+					'name' => $tab . '_default_view',
+					'label' => $caption,
+					'type' => 'select',
+					'values' => $values,
+					'default' => Utils_RecordBrowser_BrowseMode_Controller::getKey()
+			];
+			
+			$settings[] = [
+					'name' => $tab . '_show_filters',
+					'label' => '',
+					'type' => 'hidden',
+					'default' => 0
+			];
+		}
+		
+		$settings = $settings ? array_merge([
+				[
+						'name' => 'header_default_view',
+						'label' => __('Default data view'),
+						'type' => 'header'
+				]
+		], $settings): [];
+		
+		foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
+			$settings = array_merge($settings, $controller->getUserSettings());
+		}
+		
+		return [
+				__('Browsing records') => array_merge([
+						[
+								'name' => 'add_in_table_shown',
+								'label' => __('Quick new record - show by default'),
+								'type' => 'checkbox',
+								'default' => 0
+						],
+						[
+								'name' => 'hide_empty',
+								'label' => __('Hide empty fields'),
+								'type' => 'checkbox',
+								'default' => 0
+						],
+						[
+								'name' => 'enable_autocomplete',
+								'label' => __('Enable autocomplete in select/multiselect at'),
+								'type' => 'select',
+								'default' => 50,
+								'values' => [
+										0 => __('Always'),
+										20 => __('%s records', [20]),
+										50 => __('%s records', [50]),
+										100 => __('%s records', [100]),
+								]
+						],
+						[
+								'name' => 'grid',
+								'label' => __('Grid edit (experimental)'),
+								'type' => 'checkbox',
+								'default' => 0
+						],
+						[
+								'name' => 'confirm_leave',
+								'label' => __('Confirm before leave edit page'),
+								'type' => 'checkbox',
+								'default' => 1
+						],
+				], $settings)
+		];
+	}
 
     public static function check_table_name($tab, $flush=false, $failure_on_missing=true){
         return Utils_RecordBrowser_Recordset::exists($tab, $flush, !$failure_on_missing);

@@ -282,18 +282,6 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	
     	$this->process('added');    	
     	
-    	//TODO: Georgi Hristov move below to a seperate record processing callback
-    	$user = Acl::get_user();
-    	if ($user) Utils_RecordBrowserCommon::add_recent_entry($this->getTab(), $user, $id);
-    	if (Base_User_SettingsCommon::get('Utils_RecordBrowser', $this->getTab().'_auto_fav')) {
-    		DB::Execute("INSERT INTO {$this->getTab()}_favorite (user_id, {$this->getTab()}_id) VALUES (%d, %d)", [$user, $id]);
-    	}
-    	if (Base_User_SettingsCommon::get('Utils_RecordBrowser', $this->getTab().'_auto_subs')==1) {
-    		Utils_WatchdogCommon::subscribe($this->getTab(), $id);
-    	}
-    	Utils_WatchdogCommon::new_event($this->getTab(), $id, 'C');
-    	//up to here
-    			
     	return $this;
     }
     

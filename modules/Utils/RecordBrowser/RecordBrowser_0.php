@@ -24,7 +24,6 @@ class Utils_RecordBrowser extends Module {
 	private $tableTemplate;
 	private $tableColumns = [];
 	private $tableFields;
-	private $browseMode;
 	private $recordsCount = 0;
 	private $additionalCaption = '';
 	private $customDefaults = [];
@@ -34,10 +33,7 @@ class Utils_RecordBrowser extends Module {
 	private $searchCritsCallback;
 	private $action = 'browse';
 	private $browseModeController;
-	
-	
-	
-    private $browse_mode;
+
     private $recent = 0;
     private $caption = '';
     private $icon = '';
@@ -921,7 +917,7 @@ class Utils_RecordBrowser extends Module {
 		}
 		
 		if (! isset($disabledActions['info'])) {
-			$gb_row->add_info(($this->browse_mode == 'recent' ? '<b>' . __('Visited on: %s', [$record['visited_on']]) . '</b><br>': '') . Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $info ?? $record['id']));
+			$gb_row->add_info($this->getBrowseModeController()->getRecordInfo($record) . Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $info ?? $record['id']));
 		}
 
 		$this->call_additional_actions_methods($record, $gb_row);
@@ -1059,7 +1055,7 @@ class Utils_RecordBrowser extends Module {
     	$fieldColumns = [];
     	foreach($this->getRecordset()->getFields() as $field) {
     		$disabled = [
-    				'order' => $this->disabled['order'] || $this->force_order || $this->browse_mode =='recent',
+    				'order' => $this->disabled['order'] || $this->force_order || $this->getBrowseModeController()->getOrder(),
     				'quickjump' => $this->disabled['quickjump'] || !$quickjump || $field['name'] !== $quickjump,
     				'search' => $this->disabled['search']
     		];
@@ -1198,7 +1194,6 @@ class Utils_RecordBrowser extends Module {
 			$id = isset($this->record['id'])? intVal($this->record['id']): null;
 		}
 		if ($id===0) $id = null;
-        if ($id!==null && is_numeric($id)) Utils_WatchdogCommon::notified($this->getTab(), $id);
 
         if($mode == 'add') {
         	$this->customDefaults = $this->getRecordset()->getDefaultValues(array_merge($this->customDefaults, $defaults));
@@ -1237,16 +1232,10 @@ class Utils_RecordBrowser extends Module {
 		if ($mode=='history') $tb->set_inline_display();
         self::$tab_param = $tb->get_path();
 
-        $form = $this->init_module(Libs_QuickForm::module_name(),null, $mode.'/'.$this->getTab().'/'.$id);
+        $this->form = $form = $this->init_module(Libs_QuickForm::module_name(),null, $mode.'/'.$this->getTab().'/'.$id);
         if(Base_User_SettingsCommon::get($this->get_type(), 'confirm_leave') && ($mode == 'add' || $mode == 'edit'))
         	$form->set_confirm_leave_page();
-        
-        $this->form = $form;
 
-        //TODO: Georgi Hristov move this to the processing method
-        if($mode!='add')
-            Utils_RecordBrowserCommon::add_recent_entry($this->getTab(), Acl::get_user(),$id);
-  
         $result = $this->createQFfields($form, $mode);    
             
         if (is_numeric($result)) {
@@ -1260,11 +1249,11 @@ class Utils_RecordBrowser extends Module {
 
         $this->setAction($mode);
         
-        if ($mode=='edit') {
-            $this->set_module_variable('edit_start_time',$time);
+        if ($mode == 'edit') {
+            $this->set_module_variable('edit_start_time', $time);
         }
 
-        if ($show_actions!==false) {
+        if ($show_actions !== false) {
             if ($mode=='view') {
                 if ($this->get_access('edit',$this->record)) {
                     Base_ActionBarCommon::add('edit', __('Edit'), $this->create_callback_href([$this,'navigate'], ['view_entry','edit',$id]));
@@ -1298,6 +1287,7 @@ class Utils_RecordBrowser extends Module {
             $theme -> assign('info_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $id)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','info.png').'" /></a>');
 
 			if ($mode!='history') {
+				//TODO: move to BrowseMode controller
 				if ($this->modeEnabled('favorites'))
 					$theme -> assign('fav_tooltip', Utils_RecordBrowserCommon::get_fav_button($this->getTab(), $id));
 					if ($this->modeEnabled('watchdog'))
@@ -1309,44 +1299,23 @@ class Utils_RecordBrowser extends Module {
 				}
 				if ($this->clipboard_pattern) {
 					$theme -> assign('clipboard_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(__('Click to export values to copy')).' '.Libs_LeightboxCommon::get_open_href('clipboard').'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','clipboard.png').'" /></a>');
-					$text = $this->clipboard_pattern;
-					$record = Utils_RecordBrowserCommon::get_record($this->getTab(), $id);
+					$record = Utils_RecordBrowserCommon::get_record($this->tab, $id);
 					/* for every field name store its value */
-					$data = array();
-					foreach($this->getRecordset()->getFields() as $val) {
-						$fval = Utils_RecordBrowserCommon::get_val($this->getTab(), $val['id'], $record, true);
-						if(strlen($fval)) $data[$val['id']] = $fval;
-					}
-					/* some complicate preg match to find every occurence
-					 * of %{ .. {f_name} .. } pattern
-					 */
-                    if (preg_match_all('/%\{(([^%\}\{]*?\{[^%\}\{]+?\}[^%\}\{]*?)+?)\}/', $text, $match)) { // match for all patterns %{...{..}...}
-                        foreach ($match[0] as $k => $matched_string) {
-                            $text_replace = $match[1][$k];
-                            $changed = false;
-                            while(preg_match('/\{(.+?)\}/', $text_replace, $second_match)) { // match for keys in braces {key}
-                                $replace_value = '';
-                                if(array_key_exists($second_match[1], $data)) {
-                                    $replace_value = $data[$second_match[1]];
-                                    $changed = true;
-                                }
-                                $text_replace = str_replace($second_match[0], $replace_value, $text_replace);
-                            }
-                            if(! $changed ) $text_replace = '';
-                            $text = str_replace($matched_string, $text_replace, $text);
-                        }
-                    }
-					load_js("modules/Utils/RecordBrowser/selecttext.js");
+					$data = Utils_RecordBrowserCommon::get_record_vals($this->tab, $record, true, array_column($this->table_rows, 'id'));
+					
+					$text = Utils_RecordBrowserCommon::replace_clipboard_pattern($this->clipboard_pattern, array_filter($data));
+					
+					load_js($this->get_module_dir() . 'selecttext.js');
 					/* remove all php new lines, replace <br>|<br/> to new lines and quote all special chars */
 					$ftext = htmlspecialchars(preg_replace('#<[bB][rR]/?>#', "\n", str_replace("\n", '', $text)));
 					$flash_copy = '<object width="60" height="20">'.
-								'<param name="FlashVars" value="txtToCopy='.$ftext.'">'.
-								'<param name="movie" value="'.$this->get_module_dir().'copyButton.swf">'.
-								'<embed src="'.$this->get_module_dir().'copyButton.swf" flashvars="txtToCopy='.$ftext.'" width="60" height="20">'.
-								'</embed>'.
-								'</object>';
+							'<param name="FlashVars" value="txtToCopy='.$ftext.'">'.
+							'<param name="movie" value="'.$this->get_module_dir().'copyButton.swf">'.
+							'<embed src="'.$this->get_module_dir().'copyButton.swf" flashvars="txtToCopy='.$ftext.'" width="60" height="20">'.
+							'</embed>'.
+							'</object>';
 					$text = '<h3>'.__('Click Copy under the box or move mouse over box below to select text and hit Ctrl-c to copy it.').'</h3><div onmouseover="fnSelect(this)" style="border: 1px solid gray; margin: 15px; padding: 20px;">'.$text.'</div>'.$flash_copy;
-
+					
 					Libs_LeightboxCommon::display('clipboard',$text,__('Copy'));
 				}
 			}
@@ -1704,7 +1673,7 @@ class Utils_RecordBrowser extends Module {
 			
 			$editStartTime = date('Y-m-d H:i:s', $this->get_module_variable('edit_start_time'));
 			
-			if (!$record->wasModified($editStartTime)) {
+			if (! $record->wasModified($editStartTime)) {
 				return $record->save()->getId();
 			}
 
