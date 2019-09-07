@@ -231,7 +231,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
      * Load all record fields with default values
      */
     public function loadDefaults() {
-    	$values = $this->getRecordset()->getDefaultValues('add', $this);
+    	$values = $this->getRecordset()->getDefaultValues($this);
     	
     	$this->load($values);
     }
@@ -254,7 +254,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	$fieldTypes = [];
     	$fieldValues = [];
     	foreach($fields as $field) {
-    		if (!$result = $field->process($values, 'add')) continue;
+    		if (! $result = $field->process($values, 'add')) continue;
     		
     		$value = $result[$field->getId()]?? '';
     		
