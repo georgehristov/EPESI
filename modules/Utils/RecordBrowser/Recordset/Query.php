@@ -79,6 +79,8 @@ class Utils_RecordBrowser_Recordset_Query implements ArrayAccess
 		
 		$this->setSql($result->getSql());
 		$this->setValues($result->getValues());
+		
+		return $this;
 	}
 	
 	/**

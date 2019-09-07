@@ -100,7 +100,7 @@ trait Utils_RecordBrowser_Recordset_Query_Crits_Trait_Components
     	
     	$ret = $recordset->createQuery();
     	foreach ($this->getComponents(true) as $crits) {
-    		$ret = Utils_RecordBrowser_Recordset_Query::merge($ret, $crits->getQuery($recordset), $this->getJunction());
+    		$ret->append($crits->getQuery($recordset), $this->getJunction());
     	}
     	
     	return $ret;

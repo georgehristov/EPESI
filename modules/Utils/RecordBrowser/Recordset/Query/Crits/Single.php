@@ -29,7 +29,7 @@ class Utils_RecordBrowser_Recordset_Query_Crits_Single extends Utils_RecordBrows
 		$ret = $recordset->createQuery();
 
 		foreach ($this->getComponents(true) as $crits) {
-			$ret = Utils_RecordBrowser_Recordset_Query::merge($ret, $crits->getQuery($recordset));
+			$ret->append($crits->getQuery($recordset));
 		}
 		
 		return $ret;
