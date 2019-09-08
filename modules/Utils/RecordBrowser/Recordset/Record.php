@@ -347,15 +347,13 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 			
 			DB::Execute('UPDATE ' . $recordset->getDataTable() . ' SET ' . implode(', ', $fieldList) . ' WHERE id=%d', array_merge($fieldValues, [$this->getId()]));
 
-			$this->process('edited');
-		
 			if (! $options['dontNotify']) {
 				$diff = $recordset->process($diff, 'edit_changes');
 
-				$editId = $this->logHistory($diff, $options['onDate']);
-				
-				Utils_WatchdogCommon::new_event($this->getTab(), $this->getId(), 'E_' . $editId);
+				$this[':edit_id'] = $this->logHistory($diff, $options['onDate']);
 			}
+			
+			$this->process('edited');
 			
 			DB::CompleteTrans();
     	}    	
@@ -366,9 +364,11 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     public function delete($options = []) {
     	$permanent = $options['permanent']?? false;
     	
-    	if (!$permanent) return $this->setActive(false);
+    	$this->setActive(false);
     	
-    	$values = $this->process('delete');
+    	if (! $permanent) return;
+    	
+    	$values = $this->process('drop');
     	
     	if ($values === false) return false;
     	
@@ -377,7 +377,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	DB::Execute('DELETE FROM ' . $this->getRecordset()->getDataTable() . ' WHERE id=%d', [$this->getId()]);
 
     	if ($ret = DB::Affected_Rows() > 0) {
-    		$this->process('deleted');
+    		$this->process('dropped');
     	}
     	
     	return $ret;
@@ -388,7 +388,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     }
     
     public function wasModified($from, $to = null) {
-    	if (!$this->getId()) return false;
+    	if (! $this->getId()) return false;
     	
     	$to = $to?? date('Y-m-d H:i:s');
     	
@@ -402,7 +402,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	
     	$current = DB::GetOne('SELECT active FROM ' . $this->getRecordset()->getDataTable() . ' WHERE id=%d', [$this->getId()]);
     	
-    	if ($current == $state) return false;
+    	if ($current == $state) return true;
     	
     	$values = $this->process($state ? 'restore' : 'delete');
     	
@@ -414,13 +414,10 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     		DB::Execute('DELETE FROM recordbrowser_search_index WHERE tab_id=%d AND record_id=%d', [$this->getRecordset()->getId(), $this->getId()]);
     	}
     	
-		$editId = $this->logHistory([
+    	$this[':edit_id'] = $this->logHistory([
 				'id' => $state ? 'RESTORED': 'DELETED'
 		]);
 
-    	//TODO: Georgi Hristov move this to processing callback
-    	Utils_WatchdogCommon::new_event($this->getRecordset()->getTab(), $this->getId(), ($state ? 'R' : 'D') . '_' . $editId);
-    	
     	$this->process($state ? 'restored' : 'deleted');
     	
     	return true;

@@ -7,7 +7,7 @@ class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMo
 	protected static $label = 'Recent';
 	
 	public function isAvailable(Utils_RecordBrowser_Recordset $recordset) {
-		return $recordset->getProperty(self::$key);
+		return $recordset->getProperty('recent');
 	}
 	
 	public function order() {
@@ -31,12 +31,31 @@ class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMo
 					Utils_RecordBrowserCommon::add_recent_entry($tab, $user, $values[':id']);
 				}
 				break;
-			case 'deleted':
+			case 'dropped':
 				DB::Execute('DELETE FROM ' . $tab . '_recent WHERE ' . $tab . '_id = %d', [$values[':id']]);
 				break;
 		}
 		
 		return $values;
+	}
+	
+	public function moduleSettings(Utils_RecordBrowser_Recordset $recordset) {
+		$values = [
+				'[' . __('Deactivate') . ']'
+		];
+		foreach ( [5, 10, 15, 20, 25] as $value ) {
+			$values[$value] = __('%d Records', [$value]);
+		}
+		
+		return [
+				[
+						'name' => 'recent',
+						'label' => __('Recent'),
+						'type' => 'select',
+						'values' => $values,
+						'default' => $this->isAvailable($recordset)? 1: 0
+				]
+		];
 	}
 }
 

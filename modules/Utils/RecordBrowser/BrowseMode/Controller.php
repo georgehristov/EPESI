@@ -31,6 +31,12 @@ class Utils_RecordBrowser_BrowseMode_Controller {
 		return [];
 	}
 	
+	public function moduleSettings(Utils_RecordBrowser_Recordset $recordset) {
+		return [];
+	}
+	
+	public function setModuleSettings(Utils_RecordBrowser_Recordset $recordset, $values) {}
+	
 	public function process($values, $mode, $tab) {
 		return $values;
 	}
@@ -59,20 +65,24 @@ class Utils_RecordBrowser_BrowseMode_Controller {
 		return self::$registry[$key]?? new self();
 	}
 		
-	public function getOrder() {
+	final public function getOrder() {
 		return $this->order();
 	}
 	
-	public function getCrits() {
+	final public function getCrits() {
 		return $this->crits();
 	}
 		
-	public function getRecordInfo($record) {
+	final public function getRecordInfo($record) {
 		return $this->recordInfo($record);
 	}
 		
-	public function getUserSettings() {
+	final public function getUserSettings() {
 		return $this->userSettings();
+	}
+		
+	final public function getModuleSettings(Utils_RecordBrowser_Recordset $recordset) {
+		return $this->moduleSettings($recordset);
 	}
 		
 	final public static function getColumns($recordset, $disabled = []) {

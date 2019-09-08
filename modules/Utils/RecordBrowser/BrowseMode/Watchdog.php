@@ -72,6 +72,21 @@ class Utils_RecordBrowser_BrowseMode_Watchdog extends Utils_RecordBrowser_Browse
 				}
 				Utils_WatchdogCommon::new_event($tab, $values[':id'], 'C');
 				break;
+			case 'restored':
+				if (isset($this[':edit_id'])) {
+					Utils_WatchdogCommon::new_event($tab, $values[':id'], 'R_' . $values[':edit_id']);
+				}
+				break;
+			case 'deleted':
+				if (isset($this[':edit_id'])) {
+					Utils_WatchdogCommon::new_event($tab, $values[':id'], 'D_' . $values[':edit_id']);
+				}
+				break;
+			case 'edited':
+				if (isset($this[':edit_id'])) {
+					Utils_WatchdogCommon::new_event($tab, $values[':id'], 'E_' . $values[':edit_id']);
+				}
+				break;
 		}
 		
 		return $values;

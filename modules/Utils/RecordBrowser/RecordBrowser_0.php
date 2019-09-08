@@ -981,38 +981,12 @@ class Utils_RecordBrowser extends Module {
    
     //////////////////////////////////////////////////////////////////////////////////////////
     public function show_data($crits = [], $cols = [], $order = [], $admin = false, $special = false, $pdf = false, $limit = null) {
-    	$browseModeColumns = Utils_RecordBrowser_BrowseMode_Controller::getColumns($this->getRecordset(), $this->disabled['browse_mode']);
+    	$browseModeColumns = Utils_RecordBrowser_BrowseMode_Controller::getColumns($this->getRecordset(), $pdf || $admin?: $this->disabled['browse_mode']);
     	
     	//hide columns as per $cols
-    	$customColumns = array_merge($browseModeColumns, $this->getCustomColumns(), $cols);
-
-//     	if (!$pdf && !$admin) {
-//     		if ($this->modeEnabled('favorites')) {
-// 				$fav = [
-// 						'name' => '&nbsp;',
-// 						'width' => '24px',
-// 						'attrs' => 'class="Utils_RecordBrowser__favs"',
-// 						'position' => -10,
-// 						'cell_callback' => [__CLASS__, 'getFavouriteCell']
-// 				];
-// 				if (! isset($this->force_order)) $fav['order'] = ':Fav';
-// 	    		$customColumns[] = $fav;
-//     		}
-    		
-//     		if ($this->modeEnabled('watchdog')) {
-//     			$customColumns[] = [
-//     					'name' => '&nbsp;',
-//     					'width' => '24px',
-//     					'attrs' => 'class="Utils_RecordBrowser__watchdog"',
-//     					'position' => -5,
-//     					'cell_callback' => [__CLASS__, 'getWatchdogCell']
-//     			];
-//     		}
-//     	}
-
-    	$this->setCustomColumns($customColumns);
+    	$this->setCustomColumns(array_merge($browseModeColumns, $this->getCustomColumns(), $cols));
     	
-    	$crits = Utils_RecordBrowserCommon::merge_crits($crits, $this->getBrowseModeController()->getCrits());
+    	$crits = Utils_RecordBrowser_Crits::and($crits, $this->getBrowseModeController()->getCrits());
     	
     	return $this->displayTable($crits, compact('order', 'limit', 'admin'));
     }
