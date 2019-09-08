@@ -31,6 +31,9 @@ class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMo
 					Utils_RecordBrowserCommon::add_recent_entry($tab, $user, $values[':id']);
 				}
 				break;
+			case 'deleted':
+				DB::Execute('DELETE FROM ' . $tab . '_recent WHERE ' . $tab . '_id = %d', [$values[':id']]);
+				break;
 		}
 		
 		return $values;

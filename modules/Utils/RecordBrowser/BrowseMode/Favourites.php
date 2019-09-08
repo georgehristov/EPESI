@@ -70,6 +70,9 @@ class Utils_RecordBrowser_BrowseMode_Favourites extends Utils_RecordBrowser_Brow
 					DB::Execute("INSERT INTO {$tab}_favorite (user_id, {$tab}_id) VALUES (%d, %d)", [Acl::get_user(), $values[':id']]);
 				}
 			break;
+			case 'deleted':
+				DB::Execute('DELETE FROM ' . $tab . '_favorite WHERE ' . $tab . '_id = %d', [$values[':id']]);
+			break;
 		}
 		
 		return $values;

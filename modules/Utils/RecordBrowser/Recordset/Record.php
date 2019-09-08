@@ -373,8 +373,6 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	if ($values === false) return false;
     	
     	$this->clearHistory();
-    	$this->deleteFavourite();
-    	$this->deleteRecent();
     	
     	DB::Execute('DELETE FROM ' . $this->getRecordset()->getDataTable() . ' WHERE id=%d', [$this->getId()]);
 
@@ -450,22 +448,6 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	}
     	
     	return $editId;
-    }
-    
-    public function deleteRecent() {
-    	$tab = $this->getRecordset()->getTab();
-    	
-    	DB::Execute('DELETE FROM ' . $tab . '_recent WHERE ' . $tab . '_id = %d', [$this->getId()]);
-    	
-    	return DB::Affected_Rows();
-    }
-    
-    public function deleteFavourite() {
-    	$tab = $this->getRecordset()->getTab();
-    	
-    	DB::Execute('DELETE FROM ' . $tab . '_favorite WHERE ' . $tab . '_id = %d', [$this->getId()]);
-    	
-    	return DB::Affected_Rows();
     }
     
     public function clearHistory() {
