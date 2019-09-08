@@ -273,6 +273,10 @@ class Libs_QuickForm extends Module {
 				foreach ($v['filter'] as $r) {
 					$this->applyFilter($v['name'],$r);
 				}
+			
+			if (!empty($v['freeze'])) {
+				$this->getElement($v['name'])->freeze();
+			}
 		}
 	}
 			
