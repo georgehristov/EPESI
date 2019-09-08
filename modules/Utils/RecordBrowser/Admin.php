@@ -37,14 +37,8 @@ class Utils_RecordBrowser_Admin extends Module {
 						'label' => __('Manage Fields'),
 				],
 				'records' => [
-						'func' => [$this, 'show_data'],
+						'func' => [$this, 'manage_records'],
 						'label' => __('Manage Records'),
-						'args' => [
-								[],
-								[],
-								[],
-								$this->check_section_access('records', self::ACCESS_FULL)
-						]
 				],
 				'addons' => [
 						'func' => [$this, 'manage_addons'],
@@ -87,48 +81,82 @@ class Utils_RecordBrowser_Admin extends Module {
     
     public function settings() {
     	$full_access = $this->check_section_access('settings', self::ACCESS_FULL);
-
-        $form = $this->init_module(Libs_QuickForm::module_name());
-        $form->addElement('text', 'caption', __('Caption'));
-        
-        if ($callback = $this->getRecordset()->getProperty('description_callback')) {
-            echo '<div style="color:red; padding: 1em;">' . __('Description Fields take precedence over callback. Leave them empty to use callback') . '</div>';
-            
-            $form->addElement('static', '', __('Description Callback'), is_array($callback)? implode('::', $callback): $callback)->freeze();
-        }
-        
-        $form->addElement('text', 'description_pattern', __('Description Pattern'), [
-				'placeholder' => __('Record description pattern e.g. %%{{first_name}} %%{{last_name}}')
-		]);
-		$form->addElement('select', 'favorites', __('Favorites'), [
-				__('No'),
-				__('Yes')
-		]);
-        
-        $recent_values = ['[' . __('Deactivate') . ']'];
-        foreach ([5, 10, 15, 20, 25] as $rv) { $recent_values[$rv] =  __('%d Records', [$rv]) ; }
-        $form->addElement('select', 'recent', __('Recent'), $recent_values);
 		
-		$form->addElement('select', 'full_history', __('History'), [
-				__('No'),
-				__('Yes')
-		]);
-		$form->addElement('select', 'jump_to_id', __('Jump to ID'), [
-				__('No'),
-				__('Yes')
-		]);
-		$form->addElement('select', 'search_include', __('Search'), [
-				__('Exclude'),
-				__('Include by default'),
-				__('Include optional')
-		]);
-		$form->addElement('select', 'search_priority', __('Search priority'), [
-				- 2 => __('Lowest'),
-				- 1 => __('Low'),
-				0 => __('Default'),
-				1 => __('High'),
-				2 => __('Highest')
-		]);
+		$settings = [
+				[
+						'name' => 'caption',
+						'label' => __('Caption'),
+						'type' => 'text',
+				],
+				[
+						'name' => 'description_pattern',
+						'label' => __('Description Pattern'),
+						'type' => 'text',
+						'args' => [
+								'placeholder' => __('Record description pattern e.g. %%{{first_name}} %%{{last_name}}')
+						]
+				],
+				[
+						'name' => 'full_history',
+						'label' => __('History'),
+						'type' => 'select',
+						'values' => [
+								__('No'),
+								__('Yes')
+						]
+				],
+				[
+						'name' => 'jump_to_id',
+						'label' => __('Jump to ID'),
+						'type' => 'select',
+						'values' => [
+								__('No'),
+								__('Yes')
+						]
+				],
+				[
+						'name' => 'search_include',
+						'label' => __('Search'),
+						'type' => 'select',
+						'values' => [
+								__('Exclude'),
+								__('Include by default'),
+								__('Include optional')
+						]
+				],
+				[
+						'name' => 'search_priority',
+						'label' => __('Search priority'),
+						'type' => 'select',
+						'values' => [
+								- 2 => __('Lowest'),
+								- 1 => __('Low'),
+								0 => __('Default'),
+								1 => __('High'),
+								2 => __('Highest')
+						]
+				],
+		];
+		
+		if ($callback = $this->getRecordset()->getProperty('description_callback')) {
+			echo '<div style="color:red; padding: 1em;">' . __('Description Fields take precedence over callback. Leave them empty to use callback') . '</div>';
+			
+			$settings[] = [
+					'name' => '',
+					'label' => __('Description Callback'),
+					'type' => 'static',
+					'default' => is_array($callback)? implode('::', $callback): $callback,
+					'freeze' => true
+			];
+		}
+		
+		foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
+			$settings = array_merge($settings, $controller->getModuleSettings($this->getRecordset()));
+		}
+		
+		$form = $this->init_module(Libs_QuickForm::module_name());
+		
+		$form->add_array($settings);
 
 		if (! $full_access) {
 			$form->freeze();
@@ -143,10 +171,15 @@ class Utils_RecordBrowser_Admin extends Module {
         if (! $full_access) return;
             
         $clear_index_href = $this->create_confirm_callback_href(__('Are you sure?'), [$this, 'clear_search_index']);
-        echo "<a $clear_index_href>" . __('Clear search index') . "</a>";
+        echo "<a $clear_index_href>" . __('Clear search index') . '</a>';
             
         if ($form->validate()) {
-        	$this->getRecordset()->setProperties($form->exportValues());
+        	$values = $form->exportValues();
+        	$this->getRecordset()->setProperties($values);
+        	
+        	foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
+        		$controller->setModuleSettings($this->getRecordset(), $values);
+        	}
         }
         
         Base_ActionBarCommon::add('save', __('Save'), $form->get_submit_form_href());
@@ -159,6 +192,12 @@ class Utils_RecordBrowser_Admin extends Module {
     	Base_StatusBarCommon::message(__('Index cleared for this table. Indexing again - it may take some time.'));
     }
 
+    public function manage_records() {
+    	$admin = $this->check_section_access('records', self::ACCESS_FULL);
+    	
+    	$this->pack_module(Utils_RecordBrowser::module_name(), [[], compact('admin')], 'displayTable', $this->getTab(), 'manage_records_' . $this->getTab());
+    }
+    
     public function manage_addons() {
     	$full_access = $this->check_section_access('addons', self::ACCESS_FULL);
 
