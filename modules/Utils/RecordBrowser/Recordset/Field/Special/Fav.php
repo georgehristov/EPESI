@@ -3,17 +3,47 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Special_Fav extends Utils_RecordBrowser_Recordset_Field {
+	protected $disabled = [
+			'display' => [__CLASS__, 'getDisabledDisplay'],
+	];
+	
+	public static function getDisabledDisplay($field, $options = []) {
+		return $options['admin']?? false;
+	}
+	
 	public static function desc($tab = null, $name = null) {
 		return [
 				'id' => 'fav',
 				'field' => _M('Fav'),
-				'caption' => _M('Favourite'),
+				'caption' => _M('Favourites'),
 				'type' => 'fav',
 				'active' => true,
 				'visible' => false,
-				'export' => true,
+				'export' => false,
 				'processing_order' => -600,
 		];
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return [
+				'name' => '&nbsp;',
+				'width' => '24px',
+				'attrs' => 'class="Utils_RecordBrowser__favs"',
+				'position' => -10,
+				'order' => $this->getArrayId(),
+				'search' => false,
+				'visible' => $this->getRecordset()->isBrowseModeAvailable('favourites'),
+				'field' => $this->getArrayId(),
+				'cell_callback' => [__CLASS__, 'getGridCell']
+		];
+	}
+	
+	public static function getGridCell($record, $column, $options = []) {
+		static $favs;
+		
+		$favs = $favs?? $record->getRecordset()->getUserFavouriteRecords();
+		
+		return Utils_RecordBrowserCommon::get_fav_button($record->getTab(), $record[':id'], in_array($record[':id'], $favs));
 	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {

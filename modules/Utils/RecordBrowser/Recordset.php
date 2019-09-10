@@ -16,12 +16,12 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	 * @var Utils_RecordBrowser_Recordset_Field[]
 	 */
 	protected $adminFields;
-	protected $displayFields;
 	protected $hash;
 	protected $keyHash;
 	protected $arrayKeys;
 	protected $callbacks;
 	protected $addons;
+	protected $clipboardPattern;
 	protected static $datatypes;
 		
 	/**
@@ -245,22 +245,33 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		return $this;
 	}
-	
+
 	/**
+	 *
 	 * @param string $order
 	 * @return Utils_RecordBrowser_Recordset_Field[]
 	 */
-	public function getFields($order = 'position') {
-		$this->displayFields = $this->displayFields?: array_filter($this->getAdminFields(), function (Utils_RecordBrowser_Recordset_Field $field) {
-			return $field['active'] && $field['type'] != 'page_split';
+	public function getFields($options = [])
+	{
+		$options = array_merge([
+				'mode' => null,
+				'order' => 'position',
+				'admin' => false
+		], is_array($options)? $options: [
+				'order' => $options
+		]);
+
+		$order = $options['order'];
+
+		$ret = array_filter($this->getAdminFields(), function (Utils_RecordBrowser_Recordset_Field $field) use ($options) {
+			return $field->isVisible($options);
 		});
 
-		$ret = $this->displayFields;
-		if ($order !== 'position') {
+		if ($options['order'] !== 'position') {
 			$callback = is_callable($order)? $order: function ($field1, $field2) use ($order) {
 				return $field1[$order] > $field2[$order];
 			};
-			
+
 			uasort($ret, $callback);
 		}
 
@@ -284,7 +295,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 	
 	public function getAdminFields() {
-		if (!$this->adminFields) {
+		if (! $this->adminFields) {
 			foreach (Utils_RecordBrowser_Recordset_Field::getSpecial() as $class) {
 				$this->setField($class::create($this));
 			}
@@ -511,7 +522,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 	}
 	
 	public function getClipboardPattern() {
-		return DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
+		return $this->clipboardPattern = $this->clipboardPattern?: DB::GetOne('SELECT pattern FROM recordbrowser_clipboard_pattern WHERE tab=%s AND enabled=1', [$this->getTab()]);
 	}
 	
 	public function find($crits = [], $options = []) {
@@ -604,11 +615,7 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 		
 		$current = $mode == 'cloned'? ['original'=>$cloned, 'clone'=>$values]: $values;
 		
-		foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
-			if (! $controller->isAvailable($this)) continue;
-			
-			$current = $controller->process($current, $mode, $this->getTab());
-		}
+		$current = Utils_RecordBrowser_BrowseMode::processValues($current, $mode, $this->getTab());
 		
 		foreach ($this->getProcessMethods() as $callback) {
 			$return = call_user_func($callback, $current, $mode, $this->getTab());
@@ -766,6 +773,11 @@ class Utils_RecordBrowser_Recordset implements Utils_RecordBrowser_RecordsetInte
 			return true;
 		}
 		return false;
+	}
+	
+	final public function isBrowseModeAvailable($key)
+	{
+		return Utils_RecordBrowser_BrowseMode::get($key)->isAvailable($this);
 	}
 }
 

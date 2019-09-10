@@ -3,6 +3,14 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Special_Sub extends Utils_RecordBrowser_Recordset_Field {
+	protected $disabled = [
+			'display' => [__CLASS__, 'getDisabledDisplay'],
+	];
+	
+	public static function getDisabledDisplay($field, $options = []) {
+		return $options['admin']?? false;
+	}
+	
 	public static function desc($tab = null, $name = null) {
 		return [
 				'id' => 'sub',
@@ -14,6 +22,24 @@ class Utils_RecordBrowser_Recordset_Field_Special_Sub extends Utils_RecordBrowse
 				'export' => true,
 				'processing_order' => -600,
 		];
+	}
+	
+	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
+		return [
+				'name' => '&nbsp;',
+				'width' => '24px',
+				'attrs' => 'class="Utils_RecordBrowser__watchdog"',
+				'position' => -5,
+				'order' => false,
+				'search' => false,
+				'visible' => $this->getRecordset()->isBrowseModeAvailable('watchdog'),
+				'field' => $this->getArrayId(),
+				'cell_callback' => [__CLASS__, 'getGridCell']
+		];
+	}
+	
+	public static function getGridCell($record, $column, $options = []) {
+		return Utils_WatchdogCommon::get_change_subscription_icon($record->getTab(), $record[':id']);
 	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {

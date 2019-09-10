@@ -13,9 +13,22 @@
 defined("_VALID_ACCESS") || die();
 
 class Utils_RecordBrowser extends Module {
+	/**
+	 * @var Utils_RecordBrowser_Recordset
+	 */
 	private $recordset;
-	private $addInTable = false;
+	/**
+	 * @var Utils_GenericBrowser
+	 */
+	
 	private $genericBrowser;
+	
+	/**
+	 * @var Utils_RecordBrowser_BrowseMode
+	 */
+	private $browseMode;
+
+	private $addInTable = false;
 	private $columnOrder = [];
 	private $rowsExpandable = true;
 	private $customColumns = [];
@@ -32,8 +45,7 @@ class Utils_RecordBrowser extends Module {
 	private $navigationExecuted = false;
 	private $searchCritsCallback;
 	private $action = 'browse';
-	private $browseModeController;
-
+	
     private $recent = 0;
     private $caption = '';
     private $icon = '';
@@ -420,8 +432,6 @@ class Utils_RecordBrowser extends Module {
         else $params = $this->getRecordset()->getProperties();
         if ($params==false) trigger_error('There is no such recordSet as '.$this->tab.'.', E_USER_ERROR);
 
-        $this->clipboard_pattern = $this->getRecordset()->getClipboardPattern();
-
         //If Caption or icon not specified assign default values
         $this->caption = $this->getRecordset()->getCaption();
         $this->icon = $this->getRecordset()->getIcon();
@@ -489,7 +499,7 @@ class Utils_RecordBrowser extends Module {
     }
     
     protected function addBrowseModeSelector($theme) {
-    	if (! $opts = Utils_RecordBrowser_BrowseMode_Controller::getSelectList($this->getRecordset(), $this->disabled['browse_mode'])) {
+    	if (! $opts = Utils_RecordBrowser_BrowseMode::getSelectList($this->getRecordset(), $this->disabled['browse_mode'])) {
     		return;
     	}
 
@@ -501,7 +511,7 @@ class Utils_RecordBrowser extends Module {
    			$this->set_module_variable('browse_mode', '__ALL__');
     	}
 
-    	$browse_mode = $this->getBrowseModeController()->getKey();
+    	$browse_mode = $this->getBrowseMode()->getKey();
 
 		$form = $this->init_module(Libs_QuickForm::module_name());
 		$form->addElement('select', 'browse_mode', '', $opts, [
@@ -521,12 +531,12 @@ class Utils_RecordBrowser extends Module {
 		$form->assign_theme('form', $theme);
 	}
     
-	public function getBrowseModeController() {
-		if ($this->browseModeController) return $this->browseModeController;
+	public function getBrowseMode() {
+		if ($this->browseMode) return $this->browseMode;
 		
 		$key = $this->get_module_variable('browse_mode', $this->getDefaultBrowseMode());
 		
-		return $this->browseModeController = Utils_RecordBrowser_BrowseMode_Controller::getController($key);
+		return $this->browseMode = Utils_RecordBrowser_BrowseMode::get($key);
 	}
 	
 	/**
@@ -591,7 +601,7 @@ class Utils_RecordBrowser extends Module {
     		return;
     	}
     	
-    	if (! $tableColumns = $this->getTableColumns()) {
+    	if (! $tableColumns = $this->getTableColumns(['admin' => $options['admin']])) {
     		print('Invalid view, no columns to display');
     		return;
     	}
@@ -683,7 +693,7 @@ class Utils_RecordBrowser extends Module {
     }
     
     protected function getTableOrder($defaultOrder) {
-    	if (! $this->getBrowseModeController()->getOrder()) {
+    	if (! $this->getBrowseMode()->getOrder()) {
     		$tableFields = $this->getTableFields();
     		
     		$cleanOrder = array();
@@ -916,8 +926,8 @@ class Utils_RecordBrowser extends Module {
 			}
 		}
 		
-		if (! isset($disabledActions['info'])) {
-			$gb_row->add_info($this->getBrowseModeController()->getRecordInfo($record) . Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $info ?? $record['id']));
+		if (! isset($disabledActions['info'])) {//$this->getBrowseModeController()->getRecordInfo($record) . 
+			$gb_row->add_info(Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $info ?? $record['id']));
 		}
 
 		$this->call_additional_actions_methods($record, $gb_row);
@@ -981,12 +991,12 @@ class Utils_RecordBrowser extends Module {
    
     //////////////////////////////////////////////////////////////////////////////////////////
     public function show_data($crits = [], $cols = [], $order = [], $admin = false, $special = false, $pdf = false, $limit = null) {
-    	$browseModeColumns = Utils_RecordBrowser_BrowseMode_Controller::getColumns($this->getRecordset(), $pdf || $admin?: $this->disabled['browse_mode']);
-    	
+    	//TODO: pass on admin and pdf? to field for column retrieval
+
     	//hide columns as per $cols
-    	$this->setCustomColumns(array_merge($browseModeColumns, $this->getCustomColumns(), $cols));
+    	$this->setCustomColumns(array_merge($this->getCustomColumns(), $cols, $pdf? [':fav' => false, ':sub' => false]: []));
     	
-    	$crits = Utils_RecordBrowser_Crits::and($crits, $this->getBrowseModeController()->getCrits());
+    	$crits = Utils_RecordBrowser_Crits::and($crits, $this->getBrowseMode()->getCrits());
     	
     	return $this->displayTable($crits, compact('order', 'limit', 'admin'));
     }
@@ -1018,7 +1028,7 @@ class Utils_RecordBrowser extends Module {
     	return $this->grid = Base_User_SettingsCommon::get(Utils_RecordBrowser::module_name(), 'grid');
     }
     
-    protected function getTableColumns() {
+    protected function getTableColumns($options = []) {
     	if ($this->tableColumns) return $this->tableColumns;
     	
     	$quickjump = !$this->disabled['quickjump']? $this->getRecordset()->getProperty('quickjump'): '';
@@ -1027,9 +1037,9 @@ class Utils_RecordBrowser extends Module {
     	
     	$this->tableFields = [];
     	$fieldColumns = [];
-    	foreach($this->getRecordset()->getFields() as $field) {
+    	foreach($this->getRecordset()->getFields($options) as $field) {
     		$disabled = [
-    				'order' => $this->disabled['order'] || $this->force_order || $this->getBrowseModeController()->getOrder(),
+    				'order' => $this->disabled['order'] || $this->force_order || $this->getBrowseMode()->getOrder(),
     				'quickjump' => $this->disabled['quickjump'] || !$quickjump || $field['name'] !== $quickjump,
     				'search' => $this->disabled['search']
     		];
@@ -1038,7 +1048,7 @@ class Utils_RecordBrowser extends Module {
     		
     		unset($customColumns[$field['id']]);
 
-    		if (!$column['visible']) continue;
+    		if (! $column['visible']) continue;
 
     		$this->tableFields[$field['id']] = $field;
 
@@ -1256,52 +1266,33 @@ class Utils_RecordBrowser extends Module {
             }
             //Utils_ShortcutCommon::add(array('esc'), 'function(){'.$this->create_back_href_js().'}');
         }
-
-        if ($mode!='add') {
-            $theme -> assign('info_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $id)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','info.png').'" /></a>');
-
-			if ($mode!='history') {
-				//TODO: move to BrowseMode controller
-				if ($this->modeEnabled('favorites'))
-					$theme -> assign('fav_tooltip', Utils_RecordBrowserCommon::get_fav_button($this->getTab(), $id));
-					if ($this->modeEnabled('watchdog'))
-					$theme -> assign('subscription_tooltip', Utils_WatchdogCommon::get_change_subscription_icon($this->getTab(), $id));
-				if ($this->full_history) {
-					$info = Utils_RecordBrowserCommon::get_record_info($this->getTab(), $id);
-					if ($info['edited_on']===null) $theme -> assign('history_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(__('This record was never edited')).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','history_inactive.png').'" /></a>');
-					else $theme -> assign('history_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(__('Click to view edit history of currently displayed record')).' '.$this->create_callback_href(array($this,'navigate'), array('view_edit_history', $id)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','history.png').'" /></a>');
-				}
-				if ($this->clipboard_pattern) {
-					$theme -> assign('clipboard_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(__('Click to export values to copy')).' '.Libs_LeightboxCommon::get_open_href('clipboard').'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','clipboard.png').'" /></a>');
-					$record = Utils_RecordBrowserCommon::get_record($this->tab, $id);
-					/* for every field name store its value */
-					$data = Utils_RecordBrowserCommon::get_record_vals($this->tab, $record, true, array_column($this->table_rows, 'id'));
-					
-					$text = Utils_RecordBrowserCommon::replace_clipboard_pattern($this->clipboard_pattern, array_filter($data));
-					
-					load_js($this->get_module_dir() . 'selecttext.js');
-					/* remove all php new lines, replace <br>|<br/> to new lines and quote all special chars */
-					$ftext = htmlspecialchars(preg_replace('#<[bB][rR]/?>#', "\n", str_replace("\n", '', $text)));
-					$flash_copy = '<object width="60" height="20">'.
-							'<param name="FlashVars" value="txtToCopy='.$ftext.'">'.
-							'<param name="movie" value="'.$this->get_module_dir().'copyButton.swf">'.
-							'<embed src="'.$this->get_module_dir().'copyButton.swf" flashvars="txtToCopy='.$ftext.'" width="60" height="20">'.
-							'</embed>'.
-							'</object>';
-					$text = '<h3>'.__('Click Copy under the box or move mouse over box below to select text and hit Ctrl-c to copy it.').'</h3><div onmouseover="fnSelect(this)" style="border: 1px solid gray; margin: 15px; padding: 20px;">'.$text.'</div>'.$flash_copy;
-					
-					Libs_LeightboxCommon::display('clipboard',$text,__('Copy'));
-				}
-			}
+        
+        if ($id) {
+        	$theme->assign('new', Utils_RecordBrowser_BrowseMode::getRecordActions($this, $this->getRecordset()->findOne($id), $mode));
         }
+        
+//         if ($mode!='add') {
+//             $theme -> assign('info_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(Utils_RecordBrowserCommon::get_html_record_info($this->getTab(), $id)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','info.png').'" /></a>');
 
-		if ($mode == 'view') {
-			$dp = $this->getRecordset()->process($this->record, 'display');
+// 			if ($mode != 'history') {
+// 				//TODO: move to BrowseMode controller
+				
+// 				if ($this->full_history) {
+// 					$info = Utils_RecordBrowserCommon::get_record_info($this->getTab(), $id);
+// 					if ($info['edited_on']===null) $theme -> assign('history_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(__('This record was never edited')).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','history_inactive.png').'" /></a>');
+// 					else $theme -> assign('history_tooltip', '<a '.Utils_TooltipCommon::open_tag_attrs(__('Click to view edit history of currently displayed record')).' '.$this->create_callback_href(array($this,'navigate'), array('view_edit_history', $id)).'><img border="0" src="'.Base_ThemeCommon::get_template_file('Utils_RecordBrowser','history.png').'" /></a>');
+// 				}
+				
+// 			}
+//         }
+
+// 		if ($mode == 'view') {
+// 			$dp = $this->getRecordset()->process($this->record, 'display');
 			
-			if ($dp && is_array($dp)) {
-				foreach ($dp as $k => $v) $theme->assign($k, $v);
-			}				
-		}
+// 			if ($dp && is_array($dp)) {
+// 				foreach ($dp as $k => $v) $theme->assign($k, $v);
+// 			}				
+// 		}
 
         if ($mode=='view' || $mode=='history') $form->freeze();
         
@@ -2147,7 +2138,6 @@ class Utils_RecordBrowser extends Module {
 			
 			if (!$params) trigger_error('There is no such recordset as '.$this->tab.'.', E_USER_ERROR);
 
-			$this->clipboard_pattern = $this->recordset->getClipboardPattern();
 			$this->setCaption($this->recordset->getCaption());
 			$this->setIcon($this->recordset->getIcon());
 			$this->full_history = $this->recordset->getProperty('full_history');

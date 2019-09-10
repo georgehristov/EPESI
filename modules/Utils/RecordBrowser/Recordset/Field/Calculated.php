@@ -3,6 +3,9 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser_Recordset_Field {
+	protected $disabled = [
+			'required' => true
+	];
 	
 	public static function typeKey() {
 		return 'calculated';
@@ -20,10 +23,6 @@ class Utils_RecordBrowser_Recordset_Field_Calculated extends Utils_RecordBrowser
 				'gridEdit' => false
 		]);
 	}
-	
-	public function isRequiredPossible() {
-		return false;
-	}	
 	
 	public function processAdd($values) {
 		return $this->isStored()? $values: false;

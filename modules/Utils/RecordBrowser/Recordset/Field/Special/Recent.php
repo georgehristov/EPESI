@@ -44,9 +44,14 @@ class Utils_RecordBrowser_Recordset_Field_Special_Recent extends Utils_RecordBro
 		
 		$sql_null = stripos($operator, '!') === false? 'NOT': '';
 		
-		$sql = "recent.user_id IS $sql_null NULL";
+		$sql = "user_id IS $sql_null NULL";
 		
-		return $this->getRecordset()->createQuery("EXISTS (SELECT 1 FROM {$this->getTab()}_recent AS recent WHERE recent.{$this->getTab()}_id={$this->getRecordset()->getDataTableAlias()}.id AND recent.user_id=%d AND $sql)", [Acl::get_user()]);
+		return $this->getRecordset()->createQuery("EXISTS (SELECT 1 FROM (SELECT * 
+													FROM 
+														{$this->getTab()}_recent 
+													WHERE 
+														user_id=%d AND $sql LIMIT %d) AS recent
+												WHERE recent.{$this->getTab()}_id={$this->getRecordset()->getDataTableAlias()}.id)", [Acl::get_user(), $this->getRecordset()->getProperty('recent')]);
 	}
 	
 	public function queryBuilderFilters($opts = []) {

@@ -2,7 +2,7 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMode_Controller {
+class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMode {
 	protected static $key = 'recent';
 	protected static $label = 'Recent';
 	
@@ -18,8 +18,18 @@ class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMo
 		return [':Recent' => true];
 	}
 	
-	public function recordInfo($record) {
-		return '<b>' . __('Visited on: %s', [$record['visited_on']]) . '</b><br>';
+	public function recordInfo(Utils_RecordBrowser_Recordset_Record $record) {
+		$value = DB::GetOne("SELECT
+								MAX(visited_on)
+							FROM
+								{$record->getTab()}_recent
+							WHERE
+								{$record->getTab()}_id=%d AND
+								user_id=%d", [$record[':id'], Acl::get_user()]);
+								
+		return [
+				_M('Visited on') . ':' => Utils_RecordBrowser_Recordset_Field_Date::getDateValues()[$value]?? Base_RegionalSettingsCommon::time2reg($value)
+		];
 	}
 	
 	public function process($values, $mode, $tab) {
@@ -31,7 +41,7 @@ class Utils_RecordBrowser_BrowseMode_Recent extends Utils_RecordBrowser_BrowseMo
 					Utils_RecordBrowserCommon::add_recent_entry($tab, $user, $values[':id']);
 				}
 				break;
-			case 'dropped':
+			case 'destroyed':
 				DB::Execute('DELETE FROM ' . $tab . '_recent WHERE ' . $tab . '_id = %d', [$values[':id']]);
 				break;
 		}

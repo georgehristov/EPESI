@@ -3,10 +3,26 @@
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
 class Utils_RecordBrowser_Recordset_Field_Special_VisitedOn extends Utils_RecordBrowser_Recordset_Field {
-	protected $id = 'visited_on';
+	public static function desc($tab = null, $name = null) {
+		return [
+				'id' => 'visited_on',
+				'field' => _M('Visited on'),
+				'type' => 'visited_on',
+				'active' => true,
+				'visible' => false,
+				'export' => true,
+				'processing_order' => -600,
+		];
+	}
 	
 	public static function defaultDisplayCallback($record, $nolink = false, $desc = null, $tab = null) {
-		$value = $record[$desc['id']];
+		$value = DB::GetOne("SELECT
+								MAX(visited_on)
+							FROM 
+								{$tab}_recent
+							WHERE 
+								{$tab}_id=%d AND
+								user_id=%d", [$record[':id'], Acl::get_user()]);
 		
 		return Utils_RecordBrowser_Recordset_Field_Date::getDateValues()[$value]?? Base_RegionalSettingsCommon::time2reg($value);
 	}

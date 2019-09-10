@@ -2,7 +2,7 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_BrowseMode_Favourites extends Utils_RecordBrowser_BrowseMode_Controller {
+class Utils_RecordBrowser_BrowseMode_Favourites extends Utils_RecordBrowser_BrowseMode {
 	protected static $key = 'favorites';
 	protected static $label = 'Favourites';
 	
@@ -12,27 +12,6 @@ class Utils_RecordBrowser_BrowseMode_Favourites extends Utils_RecordBrowser_Brow
 	
 	public function crits() {
 		return [':fav' => true];
-	}
-	
-	public function columns() {
-		return [
-				[
-						'name' => '&nbsp;',
-						'width' => '24px',
-						'attrs' => 'class="Utils_RecordBrowser__favs"',
-						'position' => -10,
-						'order' => ':Fav',
-						'cell_callback' => [__CLASS__, 'getTableCell']
-				]
-		];
-	}
-	
-	public static function getTableCell($record, $column, $options = []) {
-		static $favs;
-		
-		$favs = $favs?? $record->getRecordset()->getUserFavouriteRecords();
-		
-		return Utils_RecordBrowserCommon::get_fav_button($record->getTab(), $record[':id'], in_array($record[':id'], $favs));
 	}
 	
 	public function userSettings() {
@@ -85,12 +64,20 @@ class Utils_RecordBrowser_BrowseMode_Favourites extends Utils_RecordBrowser_Brow
 					DB::Execute("INSERT INTO {$tab}_favorite (user_id, {$tab}_id) VALUES (%d, %d)", [Acl::get_user(), $values[':id']]);
 				}
 			break;
-			case 'dropped':
+			case 'destroyed':
 				DB::Execute('DELETE FROM ' . $tab . '_favorite WHERE ' . $tab . '_id = %d', [$values[':id']]);
 			break;
 		}
 		
 		return $values;
+	}
+	
+	public function recordActions(Module $module, Utils_RecordBrowser_Recordset_Record $record, $mode) {
+		if (! $this->isAvailable($record->getRecordset())) return;
+		
+		if (in_array($mode, ['add', 'history', 'browse'])) return;
+		
+		return Utils_RecordBrowserCommon::get_fav_button($record->getTab(), $record[':id']);
 	}
 	
 }

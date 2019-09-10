@@ -248,7 +248,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 
     	if ($values === false) return $this;
     	
-    	$fields = $this->getFields();
+    	$fields = $this->getFields('processing_order');
     	
     	$fieldList = [];
     	$fieldTypes = [];
@@ -317,7 +317,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	$diff = [];
     	$fieldList = [];
     	$fieldValues = [];
-    	foreach ( $recordset->getFields() as $field ) {
+    	foreach ( $recordset->getFields('processing_order') as $field ) {
     		if (! isset($values[$field->getId()])) {
     			if (! $options['allFields']) continue;
     			
@@ -368,7 +368,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	
     	if (! $permanent) return;
     	
-    	$values = $this->process('drop');
+    	$values = $this->process('destroy');
     	
     	if ($values === false) return false;
     	
@@ -377,7 +377,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	DB::Execute('DELETE FROM ' . $this->getRecordset()->getDataTable() . ' WHERE id=%d', [$this->getId()]);
 
     	if ($ret = DB::Affected_Rows() > 0) {
-    		$this->process('dropped');
+    		$this->process('destroyed');
     	}
     	
     	return $ret;
@@ -419,7 +419,7 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 		]);
 
     	$this->process($state ? 'restored' : 'deleted');
-    	
+
     	return true;
     }
     
@@ -514,8 +514,8 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $data;
     }
     
-    public function getFields($order = 'position') {
-    	return $this->getRecordset()->getFields($order);
+    public function getFields($options = []) {
+    	return $this->getRecordset()->getFields($options);
     }
     
     public function createHref($action = 'view', $urlOptions = []) {
@@ -714,6 +714,11 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     	return $header . Utils_TooltipCommon::format_info_tooltip(self::create($tab, $id)->read()->getTooltipData());
     }
     
+    final public function getClipboardText()
+    {
+    	return Utils_RecordBrowserCommon::replace_clipboard_pattern($this->getRecordset()->getClipboardPattern(), array_filter($this->getDisplayValues(['nolink' => true])));
+    }
+    
     public function getInfo() {
     	$edited = DB::GetRow('SELECT 
 								edited_on, 
@@ -727,10 +732,31 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
 		return [
 				'created_on' => $this[':created_on'],
 				'created_by' => $this[':created_by'],
-				'edited_on' => $edited['edited_on']?? null,
-				'edited_by' => $edited['edited_by']?? null,
+				'edited_on' => $edited[':edited_on']?? null,
+				'edited_by' => $edited[':edited_by']?? null,
 				'id' => $this->getId()
 		];
+	}
+    
+    public function getInfoTooltip() {
+    	$info = $this->getInfo();
+    	
+    	$htmlinfo = [
+    			__('Record ID').':' => $this->getId(),
+    			__('Created by').':' => Base_UserCommon::get_user_label($info['created_by']),
+    			__('Created on').':' => Base_RegionalSettingsCommon::time2reg($info['created_on'])
+    	];
+    	
+    	if ($info['edited_on']) {
+    		$htmlinfo += [
+    				__('Edited by').':' => $info['edited_by']? Base_UserCommon::get_user_label($info['edited_by']): '',
+    				__('Edited on').':' => Base_RegionalSettingsCommon::time2reg($info['edited_on'])
+    		];
+    	}
+    	
+    	$htmlinfo += Utils_RecordBrowser_BrowseMode::getRecordInfo($this);
+    	
+    	return  Utils_TooltipCommon::format_info_tooltip($htmlinfo);
 	}
     
     public function cloneData() {

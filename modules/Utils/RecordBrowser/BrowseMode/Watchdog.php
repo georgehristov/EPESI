@@ -2,7 +2,7 @@
 
 defined("_VALID_ACCESS") || die('Direct access forbidden');
 
-class Utils_RecordBrowser_BrowseMode_Watchdog extends Utils_RecordBrowser_BrowseMode_Controller {
+class Utils_RecordBrowser_BrowseMode_Watchdog extends Utils_RecordBrowser_BrowseMode {
 	protected static $key = 'watchdog';
 	protected static $label = 'Watchdog';
 	
@@ -12,22 +12,6 @@ class Utils_RecordBrowser_BrowseMode_Watchdog extends Utils_RecordBrowser_Browse
 	
 	public function crits() {
 		return [':Sub' => true];
-	}
-	
-	public function columns() {
-		return [
-				[
-						'name' => '&nbsp;',
-						'width' => '24px',
-						'attrs' => 'class="Utils_RecordBrowser__watchdog"',
-						'position' => -5,
-						'cell_callback' => [__CLASS__, 'getTableCell']
-				]
-		];
-	}
-	
-	public static function getTableCell ($record, $column, $options = []) {
-		return Utils_WatchdogCommon::get_change_subscription_icon($record->getTab(), $record[':id']);
 	}
 	
 	public function userSettings() {
@@ -73,23 +57,31 @@ class Utils_RecordBrowser_BrowseMode_Watchdog extends Utils_RecordBrowser_Browse
 				Utils_WatchdogCommon::new_event($tab, $values[':id'], 'C');
 				break;
 			case 'restored':
-				if (isset($this[':edit_id'])) {
+				if (isset($values[':edit_id'])) {
 					Utils_WatchdogCommon::new_event($tab, $values[':id'], 'R_' . $values[':edit_id']);
 				}
 				break;
 			case 'deleted':
-				if (isset($this[':edit_id'])) {
+				if (isset($values[':edit_id'])) {
 					Utils_WatchdogCommon::new_event($tab, $values[':id'], 'D_' . $values[':edit_id']);
 				}
 				break;
 			case 'edited':
-				if (isset($this[':edit_id'])) {
+				if (isset($values[':edit_id'])) {
 					Utils_WatchdogCommon::new_event($tab, $values[':id'], 'E_' . $values[':edit_id']);
 				}
 				break;
 		}
 		
 		return $values;
+	}
+	
+	public function recordActions(Module $module, Utils_RecordBrowser_Recordset_Record $record, $mode) {
+		if (! $this->isAvailable($record->getRecordset())) return;
+		
+		if (in_array($mode, ['add', 'history', 'browse'])) return;
+		
+		return Utils_WatchdogCommon::get_change_subscription_icon($record->getTab(), $record[':id']);
 	}
 }
 

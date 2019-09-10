@@ -10,10 +10,12 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	protected $recordset;
 	protected $formElement = null;
 	protected $desc = [];
-	protected static $registry = [];
-	protected static $special = [];
-	
-	
+	protected $disabled = [
+			'display' => false,
+			'required' => false
+	];
+	private static $registry = [];
+	private static $special = [];
 	
 	// *********** Override below methods to achive desired functionality in child fields *********** //
 	
@@ -27,10 +29,6 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	
 	public static function paramElements() {
 		return [];
-	}
-	
-	public function isRequiredPossible() {
-		return true;
 	}
 	
 	public function gridColumnOptions(Utils_RecordBrowser $recordBrowser) {
@@ -293,7 +291,7 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	public function processGet($values, $options = []) {
 		$sqlId = $this->getSqlId();
 		
-		$value = $sqlId && isset($values[$sqlId])? $values[$sqlId]: $this->defaultValue();
+		$value = ($sqlId && isset($values[$sqlId]))? $values[$sqlId]: $this->defaultValue();
 		
 		return [
 				$this->getArrayId() => $this->decodeValue($value, $options)
@@ -474,12 +472,37 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		return self::$special;
 	}
 	
-	final public function isVisible() {
-		return $this['visible'];
+	final public function isVisible($options = []) {
+		$options = array_merge([
+				'mode' => 'browse',
+				'admin' => false
+		], is_array($options)? $options: [
+				'mode' => $options
+		]);
+
+		$ret = $this->isActive() && ! $this->isDisabled('display', $options);
+		
+		switch ($options['mode']) {
+			case 'browse':
+				$ret &= $this['visible'];
+			break;
+			
+			default:
+				;
+			break;
+		}
+		
+		return $ret;
 	}
 	
 	final public function isRequired() {
 		return $this['required'];
+	}
+	
+	final public function isDisabled($key, $options = []) {
+		$disabled = $this->disabled[$key]?? false;
+
+		return is_callable($disabled)? call_user_func($disabled, $this, $options): $disabled;
 	}
 	
 	final public static function getFieldId($field_name) {
@@ -657,15 +680,16 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 		
 		$desc['param'] = $this->decodeParam($desc['param']);
 				
-		if (!$this->isRequiredPossible())
+		if ($this->isDisabled('required')) {
 			$desc['required'] = false;
-		
+		}
+
 		$this->desc = $desc;
 		
 		return $this;
 	}
 
-	final public static function getGridCell($record, $column, $options = []) {
+	public static function getGridCell($record, $column, $options = []) {
 		$options = array_merge([
 				'nolink' => false,
 				'admin' => false
@@ -801,6 +825,10 @@ class Utils_RecordBrowser_Recordset_Field implements IteratorAggregate, ArrayAcc
 	
 	public function getExtra() {
 		return $this['extra'];
+	}
+	
+	public function isActive() {
+		return $this->getActive();
 	}
 	
 	public function getActive() {

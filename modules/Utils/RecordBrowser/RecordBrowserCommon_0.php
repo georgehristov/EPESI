@@ -337,14 +337,14 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 			
 			if (! $recordset->getUserAccess('browse')) continue;
 			
-			if (! $values = Utils_RecordBrowser_BrowseMode_Controller::getSelectList($recordset)) continue;
+			if (! $values = Utils_RecordBrowser_BrowseMode::getSelectList($recordset)) continue;
 
 			$settings[] = [
 					'name' => $tab . '_default_view',
 					'label' => $caption,
 					'type' => 'select',
 					'values' => $values,
-					'default' => Utils_RecordBrowser_BrowseMode_Controller::getKey()
+					'default' => Utils_RecordBrowser_BrowseMode::getKey()
 			];
 			
 			$settings[] = [
@@ -362,10 +362,8 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 						'type' => 'header'
 				]
 		], $settings): [];
-		
-		foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
-			$settings = array_merge($settings, $controller->getUserSettings());
-		}
+
+		$settings = array_merge($settings, Utils_RecordBrowser_BrowseMode::getUserSettings());
 		
 		return [
 				__('Browsing records') => array_merge([
@@ -1487,12 +1485,15 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
 			DB::Execute('DELETE FROM '.$tab.'_favorite WHERE user_id=%d AND '.$tab.'_id=%d', array(Acl::get_user(), $id));
 		}
     }
-    public static function get_html_record_info($tab, $id){
+    public static function get_html_record_info($tab, $id) {
         if (is_string($id)) {
             //  to separate id in recurrent event
             $tmp = explode('_', $id);
             $id = $tmp[0];
         }
+        
+        return Utils_RecordBrowser_Recordset::create($tab)->findOne($id)->getInfoTooltip();
+        
         if (is_numeric($id)) $info = Utils_RecordBrowserCommon::get_record_info($tab, $id);
         elseif (is_array($id)) $info = $id;
         else trigger_error('Cannot decode record id: ' . print_r($id, true), E_USER_ERROR);
@@ -1506,7 +1507,7 @@ class Utils_RecordBrowserCommon extends ModuleCommon {
                     __('Created on').':'=>Base_RegionalSettingsCommon::time2reg($info['created_on'])
                         );
         if ($info['edited_on']!==null) {
-            $htmlinfo=$htmlinfo+array(
+            $htmlinfo += array(
                     __('Edited by').':'=>$info['edited_by']!==null?Base_UserCommon::get_user_label($info['edited_by']):'',
                     __('Edited on').':'=>Base_RegionalSettingsCommon::time2reg($info['edited_on'])
                         );
@@ -2887,6 +2888,7 @@ Utils_RecordBrowser_Crits::registerPlaceholderCallback(['Utils_RecordBrowserComm
 Utils_RecordBrowser_Recordset_Field::register([
 		Utils_RecordBrowser_Recordset_Field_Special_Id::class,
 		Utils_RecordBrowser_Recordset_Field_Special_Active::class,
+		Utils_RecordBrowser_Recordset_Field_Special_PageSplit::class,
 		Utils_RecordBrowser_Recordset_Field_Special_CreatedBy::class,
 		Utils_RecordBrowser_Recordset_Field_Special_CreatedOn::class,
 		Utils_RecordBrowser_Recordset_Field_Special_EditedOn::class,
@@ -2913,10 +2915,13 @@ Utils_RecordBrowser_Recordset_Field::register([
 		Utils_RecordBrowser_Recordset_Field_Hidden::class,
 ]);
 
-Utils_RecordBrowser_BrowseMode_Controller::register([
+Utils_RecordBrowser_BrowseMode::register([
+		Utils_RecordBrowser_BrowseMode_Info::class,
+		Utils_RecordBrowser_BrowseMode_History::class,
 		Utils_RecordBrowser_BrowseMode_Favourites::class,
 		Utils_RecordBrowser_BrowseMode_Watchdog::class,
-		Utils_RecordBrowser_BrowseMode_Recent::class
+		Utils_RecordBrowser_BrowseMode_Recent::class,
+		Utils_RecordBrowser_BrowseMode_Clipboard::class,		
 ]);
 
 load_js(__DIR__ . '/js/default.js');

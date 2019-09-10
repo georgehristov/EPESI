@@ -1,13 +1,15 @@
 <?php
 /**
- * RecordBrowserCommon class.
+ * Utils_RecordBrowser_Admin class
+ * 
+ * Provides admin management functionality for the Utils_RecordBrowser module
  *
  * @author Georgi Hristov <ghristov@gmx.de>
  * @copyright Copyright &copy; 2019, X Systems Ltd
  * @license MIT
- * @version 1.0
+ * @version 2.0
  * @package epesi-utils
- * @subpackage RecordBrowser
+ * @subpackage Utils_RecordBrowser
  */
 
 defined("_VALID_ACCESS") || die();
@@ -150,9 +152,7 @@ class Utils_RecordBrowser_Admin extends Module {
 			];
 		}
 		
-		foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
-			$settings = array_merge($settings, $controller->getModuleSettings($this->getRecordset()));
-		}
+		$settings = array_merge($settings, Utils_RecordBrowser_BrowseMode::getModuleSettings($this->getRecordset()));
 		
 		$form = $this->init_module(Libs_QuickForm::module_name());
 		
@@ -177,9 +177,7 @@ class Utils_RecordBrowser_Admin extends Module {
         	$values = $form->exportValues();
         	$this->getRecordset()->setProperties($values);
         	
-        	foreach (Utils_RecordBrowser_BrowseMode_Controller::getRegistry() as $controller) {
-        		$controller->setModuleSettings($this->getRecordset(), $values);
-        	}
+        	Utils_RecordBrowser_BrowseMode::setModuleSettings($this->getRecordset(), $values);
         }
         
         Base_ActionBarCommon::add('save', __('Save'), $form->get_submit_form_href());
@@ -194,7 +192,7 @@ class Utils_RecordBrowser_Admin extends Module {
 
     public function manage_records() {
     	$admin = $this->check_section_access('records', self::ACCESS_FULL);
-    	
+
     	$this->pack_module(Utils_RecordBrowser::module_name(), [[], compact('admin')], 'displayTable', $this->getTab(), 'manage_records_' . $this->getTab());
     }
     
