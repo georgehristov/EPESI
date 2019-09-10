@@ -45,6 +45,7 @@ class Utils_RecordBrowser extends Module {
 	private $navigationExecuted = false;
 	private $searchCritsCallback;
 	private $action = 'browse';
+	public $form;
 	
     private $recent = 0;
     private $caption = '';
@@ -67,9 +68,7 @@ class Utils_RecordBrowser extends Module {
 	private $fields_in_tabs = array();
 	private $hide_tab = array();
     private $jump_to_new_record = false;
-    
-    
-    
+
     public static $tab_param = '';
     public static $clone_result = null;
     public static $clone_tab = null;
@@ -105,7 +104,7 @@ class Utils_RecordBrowser extends Module {
     private $show_add_in_table = false;
     
     public $view_fields_permission;
-    public $form = null;
+    
     public $tab;
     public $grid = null;
     private $fixed_columns_class = array('Utils_RecordBrowser__favs', 'Utils_RecordBrowser__watchdog');
@@ -1217,8 +1216,9 @@ class Utils_RecordBrowser extends Module {
         self::$tab_param = $tb->get_path();
 
         $this->form = $form = $this->init_module(Libs_QuickForm::module_name(),null, $mode.'/'.$this->getTab().'/'.$id);
-        if(Base_User_SettingsCommon::get($this->get_type(), 'confirm_leave') && ($mode == 'add' || $mode == 'edit'))
+        if(Base_User_SettingsCommon::get($this->get_type(), 'confirm_leave') && ($mode == 'add' || $mode == 'edit')) {
         	$form->set_confirm_leave_page();
+        }
 
         $result = $this->createQFfields($form, $mode);    
             
@@ -1241,7 +1241,7 @@ class Utils_RecordBrowser extends Module {
             if ($mode=='view') {
                 if ($this->get_access('edit',$this->record)) {
                     Base_ActionBarCommon::add('edit', __('Edit'), $this->create_callback_href([$this,'navigate'], ['view_entry','edit',$id]));
-                    Utils_ShortcutCommon::add(['Ctrl','E'], 'function(){'.$this->create_callback_href_js([$this,'navigate'], ['view_entry','edit',$id]).'}');
+                    Utils_ShortcutCommon::add(['Ctrl','E'], 'function(){' . $this->create_callback_href_js([$this,'navigate'], ['view_entry','edit',$id]).'}');
                 }
                 if ($this->get_access('delete',$this->record)) {
                     Base_ActionBarCommon::add('delete', __('Delete'), $this->create_confirm_callback_href(__('Are you sure you want to delete this record?'),array($this,'delete_record'),array($id)));
@@ -2127,6 +2127,10 @@ class Utils_RecordBrowser extends Module {
 	
 	public function getTab() {
 		return $this->getRecordset()->getTab();
+	}
+	
+	public function getForm() {
+		return $this->form;
 	}
 	
 	public function getRecordset($force = false) {
