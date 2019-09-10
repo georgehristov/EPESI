@@ -62,6 +62,10 @@ class Utils_RecordBrowser_Recordset_Record implements ArrayAccess {
     public function getId() {
         return $this[':id'];
     }
+    
+    public function getToken() {
+        return implode('/', [$this->getTab(), $this->getId()]);
+    }
 
     public function getDisplayValues($options = []) {
     	$options = array_merge([
