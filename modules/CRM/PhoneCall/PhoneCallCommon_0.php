@@ -245,87 +245,47 @@ class CRM_PhoneCallCommon extends ModuleCommon {
 
 	public static function submit_phonecall($values, $mode) {
 		switch ($mode) {
-		case 'display':
-			$values['date_and_time'] = date('Y-m-d H:i:s');
-			$values['subject'] = __('Follow-up').': '.$values['subject'];
-			$values['status'] = 0;
-			$ret = array();
-            $related_id = 'phonecall/' . $values['id'];
-			if (CRM_MeetingInstall::is_installed()) {
-                $meeting_defaults = array(
-                    'title'       => $values['subject'],
-                    'permission'  => $values['permission'],
-                    'priority'    => $values['priority'],
-                    'description' => $values['description'],
-                    'date'        => date('Y-m-d'),
-                    'time'        => date('H:i:s'),
-                    'duration'    => 3600,
-                    'employees'   => $values['employees'],
-                    'customers'   => $values['customer'],
-                    'status'      => 0,
-                    'related'     => $related_id
-                );
-                $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Meeting')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', $meeting_defaults, 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'" /></a>';
-            }
-			if (CRM_TasksInstall::is_installed()) {
-                $task_defaults = array(
-                    'title'       => $values['subject'],
-                    'permission'  => $values['permission'],
-                    'priority'    => $values['priority'],
-                    'description' => $values['description'],
-                    'employees'   => $values['employees'],
-                    'customers'   => $values['customer'],
-                    'status'      => 0,
-                    'deadline'    => date('Y-m-d', strtotime('+1 day')),
-                    'related'     => $related_id
-                );
-                $ret['new']['task'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Task')).' '.Utils_RecordBrowserCommon::create_new_record_href('task', $task_defaults).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Tasks','icon-small.png').'"></a>';
-            }
-            $values['related'] = $related_id;
-			$ret['new']['phonecall'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Phonecall')).' '.Utils_RecordBrowserCommon::create_new_record_href('phonecall', $values, 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_PhoneCall','icon-small.png').'"></a>';
-			$ret['new']['note'] = Utils_RecordBrowser::$rb_obj->add_note_button('phonecall/'.$values['id']);
-			return $ret;
-		case 'adding':
-			$values['permission'] = Base_User_SettingsCommon::get('CRM_Common','default_record_permission');
-		case 'editing':
-			if (Utils_RecordBrowser::$rb_obj instanceof Utils_RecordBrowser) {
-				load_js('modules/' . self::module_name() . '/js/main.js');
-				eval_js('CRM_PhoneCall__form_control.init(\''.Utils_RecordBrowser::$rb_obj->form->getAttribute('name').'\', '. ($values['other_phone']? 1: 0) . ' , ' . ($values['other_customer']? 1: 0) . ')');
-			}
-			break;
-		case 'edit':
-			$old_vals = Utils_RecordBrowserCommon::get_record('phonecall',$values['id']);
-			$old_related = $old_vals['employees'];
-			if (!isset($old_vals['other_customer'])) $old_related[] = $old_vals['customer'];
-		case 'added':
-			if (isset($values['follow_up']))
-				CRM_FollowupCommon::add_tracing_notes($values['follow_up'][0], $values['follow_up'][1], $values['follow_up'][2], 'phonecall', $values['id'], $values['subject']);
-			self::subscribed_employees($values);
-			$related = $values['employees'];
-			if (!isset($values['other_customer'])) $related[] = $values['customer'];
-			foreach ($related as $v) {
-				if ($mode==='edit' && in_array($v, $old_related)) continue;
-				list($t, $id) = CRM_ContactsCommon::decode_record_token($v);
-				$subs = Utils_WatchdogCommon::get_subscribers($t,$id);
-				foreach($subs as $s)
-					Utils_WatchdogCommon::user_subscribe($s, 'phonecall',$values['id']);
-			}
-			if ($mode=='added') break;
-		case 'add':
-			if(isset($values['phone']) && $values['phone']) {
-				if($values['customer']{0}=='P' && $values['phone']=='4')
-				    $values['phone'] == '1';
-				elseif($values['customer']{0}=='C' && $values['phone']!='4')
-				    $values['phone'] == '4';
-			} 
-			if (isset($values['other_customer']) && $values['other_customer']) {
-				$values['other_phone']=1;
-				$values['customer']='';
-			} else {
-				$values['other_customer_name']='';
-			}
-			if (isset($values['other_phone']) && $values['other_phone']) $values['phone']='';
-			else $values['other_phone_number']='';
+			case 'adding':
+				$values['permission'] = Base_User_SettingsCommon::get('CRM_Common','default_record_permission');
+			case 'editing':
+				if (Utils_RecordBrowser::$rb_obj instanceof Utils_RecordBrowser) {
+					load_js('modules/' . self::module_name() . '/js/main.js');
+					eval_js('CRM_PhoneCall__form_control.init(\''.Utils_RecordBrowser::$rb_obj->form->getAttribute('name').'\', '. ($values['other_phone']? 1: 0) . ' , ' . ($values['other_customer']? 1: 0) . ')');
+				}
+				break;
+			case 'edit':
+				$old_vals = Utils_RecordBrowserCommon::get_record('phonecall',$values['id']);
+				$old_related = $old_vals['employees'];
+				if (!isset($old_vals['other_customer'])) $old_related[] = $old_vals['customer'];
+			case 'added':
+				if (isset($values['follow_up']))
+					CRM_FollowupCommon::add_tracing_notes($values['follow_up'][0], $values['follow_up'][1], $values['follow_up'][2], 'phonecall', $values['id'], $values['subject']);
+				self::subscribed_employees($values);
+				$related = $values['employees'];
+				if (!isset($values['other_customer'])) $related[] = $values['customer'];
+				foreach ($related as $v) {
+					if ($mode==='edit' && in_array($v, $old_related)) continue;
+					list($t, $id) = CRM_ContactsCommon::decode_record_token($v);
+					$subs = Utils_WatchdogCommon::get_subscribers($t,$id);
+					foreach($subs as $s)
+						Utils_WatchdogCommon::user_subscribe($s, 'phonecall',$values['id']);
+				}
+				if ($mode=='added') break;
+			case 'add':
+				if(isset($values['phone']) && $values['phone']) {
+					if($values['customer']{0}=='P' && $values['phone']=='4')
+					    $values['phone'] == '1';
+					elseif($values['customer']{0}=='C' && $values['phone']!='4')
+					    $values['phone'] == '4';
+				} 
+				if (isset($values['other_customer']) && $values['other_customer']) {
+					$values['other_phone']=1;
+					$values['customer']='';
+				} else {
+					$values['other_customer_name']='';
+				}
+				if (isset($values['other_phone']) && $values['other_phone']) $values['phone']='';
+				else $values['other_phone_number']='';
 		}
 		return $values;
 	}
@@ -631,4 +591,6 @@ class CRM_PhoneCallCommon extends ModuleCommon {
         return array('label' => __('Phonecalls'), 'section' => __('Features Configuration'));
     }
 }
+
+CRM_PhoneCall_BrowseMode::register();
 ?>

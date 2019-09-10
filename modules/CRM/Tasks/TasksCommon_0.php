@@ -215,60 +215,48 @@ class CRM_TasksCommon extends ModuleCommon {
 	}
 
 	public static function submit_task($values, $mode) {
-		$me = CRM_ContactsCommon::get_my_record();
 		switch ($mode) {
-		case 'display':
-			$values['title'] = __('Follow-up').': '.$values['title'];
-			$values['status'] = 0;
-			$values['deadline'] = date('Y-m-d', strtotime('+1 day'));
-			$ret = array();
-			$cus = reset($values['customers']);
-			if (CRM_MeetingInstall::is_installed()) $ret['new']['event'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Meeting')).' '.Utils_RecordBrowserCommon::create_new_record_href('crm_meeting', array('title'=>$values['title'],'permission'=>$values['permission'],'priority'=>$values['priority'],'description'=>$values['description'],'date'=>date('Y-m-d'),'time'=>date('H:i:s'),'duration'=>3600,'employees'=>$values['employees'], 'customers'=>$values['customers'],'status'=>0), 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Calendar','icon-small.png').'" /></a>';
-			$ret['new']['task'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Task')).' '.Utils_RecordBrowserCommon::create_new_record_href('task', $values).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_Tasks','icon-small.png').'" /></a>';
-			if (CRM_PhoneCallInstall::is_installed()) $ret['new']['phonecall'] = '<a '.Utils_TooltipCommon::open_tag_attrs(__('New Phonecall')).' '.Utils_RecordBrowserCommon::create_new_record_href('phonecall', array('subject'=>$values['title'],'permission'=>$values['permission'],'priority'=>$values['priority'],'description'=>$values['description'],'date_and_time'=>date('Y-m-d H:i:s'),'employees'=>$values['employees'], 'customer'=>$cus,'status'=>0), 'none', false).'><img border="0" src="'.Base_ThemeCommon::get_template_file('CRM_PhoneCall','icon-small.png').'" /></a>';
-			$ret['new']['note'] = Utils_RecordBrowser::$rb_obj->add_note_button('task/'.$values['id']);
-			return $ret;
-		case 'adding':
-			if (!isset($values['deadline'])) {
-				$values['deadline'] = strtotime(date('Y-m-d').' 23:59:59');
-			}
-			$values['permission'] = Base_User_SettingsCommon::get('CRM_Common','default_record_permission');
-			break;
-		case 'editing':
-			if (isset($values['timeless']) && $values['timeless']) {
-				// if it is timeless event then adjust time to show it properly
-				// in GUI - timestamp field translates time.
-				$values['deadline'] = Base_RegionalSettingsCommon::reg2time($values['deadline']);
-			}
-			break;
-		case 'add':
-		case 'edit':
-			if (isset($values['timeless']) && $values['timeless'] && $values['deadline']) {
-				// if we set timeless event then, set certain time to database
-				$values['deadline'] = Base_RegionalSettingsCommon::time2reg($values['deadline'], false, true, true, false) . ' 12:00:00';
-			}
-			break;
-		case 'edited':
-			$old_values = Utils_RecordBrowserCommon::get_record('task',$values['id']);
-			$old_related = array_merge($old_values['employees'],$old_values['customers']);
-		case 'added':
-			if (isset($values['follow_up']))
-				CRM_FollowupCommon::add_tracing_notes($values['follow_up'][0], $values['follow_up'][1], $values['follow_up'][2], 'task', $values['id'], $values['title']);
-			self::subscribed_employees($values);
-			$related = array_merge($values['employees'],$values['customers']);
-			foreach ($related as $v) {
-				if ($mode==='edit' && in_array($v, $old_related)) continue;
-				if (!is_numeric($v)) {
-					list($t, $id) = explode('/', $v);
-				} else {
-					$t = 'contact';
-					$id = $v;
+			case 'adding':
+				if (!isset($values['deadline'])) {
+					$values['deadline'] = strtotime(date('Y-m-d').' 23:59:59');
 				}
-				$subs = Utils_WatchdogCommon::get_subscribers($t,$id);
-				foreach($subs as $s)
-					Utils_WatchdogCommon::user_subscribe($s, 'task',$values['id']);
-			}
-			break;
+				$values['permission'] = Base_User_SettingsCommon::get('CRM_Common','default_record_permission');
+				break;
+			case 'editing':
+				if (isset($values['timeless']) && $values['timeless']) {
+					// if it is timeless event then adjust time to show it properly
+					// in GUI - timestamp field translates time.
+					$values['deadline'] = Base_RegionalSettingsCommon::reg2time($values['deadline']);
+				}
+				break;
+			case 'add':
+			case 'edit':
+				if (isset($values['timeless']) && $values['timeless'] && $values['deadline']) {
+					// if we set timeless event then, set certain time to database
+					$values['deadline'] = Base_RegionalSettingsCommon::time2reg($values['deadline'], false, true, true, false) . ' 12:00:00';
+				}
+				break;
+			case 'edited':
+				$old_values = Utils_RecordBrowserCommon::get_record('task',$values['id']);
+				$old_related = array_merge($old_values['employees'],$old_values['customers']);
+			case 'added':
+				if (isset($values['follow_up']))
+					CRM_FollowupCommon::add_tracing_notes($values['follow_up'][0], $values['follow_up'][1], $values['follow_up'][2], 'task', $values['id'], $values['title']);
+				self::subscribed_employees($values);
+				$related = array_merge($values['employees'],$values['customers']);
+				foreach ($related as $v) {
+					if ($mode==='edit' && in_array($v, $old_related)) continue;
+					if (!is_numeric($v)) {
+						list($t, $id) = explode('/', $v);
+					} else {
+						$t = 'contact';
+						$id = $v;
+					}
+					$subs = Utils_WatchdogCommon::get_subscribers($t,$id);
+					foreach($subs as $s)
+						Utils_WatchdogCommon::user_subscribe($s, 'task',$values['id']);
+				}
+				break;
 		}
 		return $values;
 	}
@@ -580,5 +568,7 @@ class CRM_TasksCommon extends ModuleCommon {
     }
 
 }
+
+CRM_Tasks_BrowseMode::register();
 
 ?>
