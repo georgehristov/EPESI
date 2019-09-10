@@ -125,7 +125,13 @@ class Utils_RecordBrowser_BrowseMode {
 		$classes = $classes?: static::class;
 
 		foreach (is_array($classes)? $classes: [$classes] as $class) {
-			self::$registry[$class::getKey()] = new $class();
+			$key = $class::getKey();
+			
+			if (isset(self::$registry[$key])) {
+				$key = $class;
+			}
+			
+			self::$registry[$key] = new $class();
 		}
 	}
 	
