@@ -112,8 +112,7 @@ class Utils_RecordBrowserInstall extends ModuleInstall {
 			array('name'=>Utils_WatchdogInstall::module_name(), 'version'=>0),
 			array('name'=>Base_User_LoginInstall::module_name(), 'version'=>0),
 			array('name'=>Base_UserInstall::module_name(), 'version'=>0),
-			array('name'=>Utils_QueryBuilderInstall::module_name(), 'version'=>0),
-			array('name'=>Utils_RecordBrowser_FieldInstall::module_name(), 'version'=>0)
+			array('name'=>Utils_QueryBuilderInstall::module_name(), 'version'=>0)
 		);
 	}
 	
